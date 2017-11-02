@@ -16,9 +16,8 @@ export interface ITimeline {
 }
 
 export interface IMeetingInfo {
-  subjectLength: number;
-  organizerLength: number;
-  utf8: string;
+  subject: string;
+  organizer: string;
 }
 
 export interface ITimelineRequest {

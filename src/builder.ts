@@ -3,28 +3,28 @@ import StructType = require("ref-struct");
 import {IMeetingInfo, ITimeline, ITimelineEntry} from "./calender";
 
 enum Outgoing {
-  SET_ADDRESS, // 3
-  SET_POWER_OFF, // 1
-  SET_TIMEOUT, // 1
-  SET_LOCAL_TIME, // 4
-  SET_TIME_FORMAT, // 1
-  SET_EXPECTED_FIRMWARE_VERSION, // 2
-  WRITE_ASSERTS, // [6, )
-  WRITE_FIRMWARE, // [4, )
-  SET_LANGID, // 1
-  SET_ROOM_SIZE, // 2
-  SET_ROOM_EQUIPMENTS, // 1
-  SET_ACCESS_RIGHT, // 1
-  SET_HARDWARE_FEATURE, // 1
-  SET_BACKLIGHT, // 1
-  SET_ROOM_NAME, // [1, )
-  SET_TIMELINE, // [2, )
-  UPDATE_TIMELINE, // 6
-  SET_MEETING_INFO, // [2, )
-  SET_MEETING_BODY, // [1, )
-  SET_ERROR_CODE, // 1
+  SET_ADDRESS,
+  SET_POWER_OFF,
+  SET_TIMEOUT,
+  SET_LOCAL_TIME,
+  SET_TIME_FORMAT,
+  SET_EXPECTED_FIRMWARE_VERSION,
+  WRITE_ASSERTS,
+  WRITE_FIRMWARE,
+  SET_LANGID,
+  SET_ROOM_SIZE,
+  SET_ROOM_EQUIPMENTS,
+  SET_ACCESS_RIGHT,
+  SET_HARDWARE_FEATURE,
+  SET_BACKLIGHT,
+  SET_ROOM_NAME,
+  SET_TIMELINE,
+  UPDATE_TIMELINE,
+  SET_MEETING_INFO,
+  SET_MEETING_BODY,
+  SET_ERROR_CODE,
   GET_UUID,
-  SET_UNCONFIGURED_ID, // 2
+  SET_UNCONFIGURED_ID,
 }
 
 enum LANG_ID {
@@ -40,10 +40,62 @@ const StructSetAddress = StructType({
   length : ref.types.uint16,
 }, {packed: true});
 
+/* bitmap for power control.
+* currently we will only disable the port power once all bits are set */
+const StructSetPowerOff = StructType({
+  cmd: ref.types.uint8,
+  bitmap: ref.types.uint8,
+}, {packed: true});
+
+const StructSetTimeout = StructType({
+  cmd: ref.types.uint8,
+  seconds: ref.types.uint8,
+}, {packed: true});
+
+const StructWriteAssertsHdr = StructType({
+  cmd: ref.types.uint8,
+  pathLen: ref.types.uint8,
+  dataLen: ref.types.uint8,
+}, {packed: true});
+
+const StructWriteFirmwareHdr = StructType({
+  cmd: ref.types.uint8,
+  dataLen: ref.types.uint8,
+}, {packed: true});
+
+const StructSetRoomSize = StructType({
+  cmd: ref.types.uint8,
+  maxPeople: ref.types.uint16,
+}, {packed: true});
+
+const StructSetRoomEquipments = StructType({
+  cmd: ref.types.uint8,
+  bitmap: ref.types.uint8,
+}, {packed: true});
+
+const StructAccessRight = StructType({
+  cmd: ref.types.uint8,
+  bitmap: ref.types.uint8,
+}, {packed: true});
+
+const StructHardwareFeature = StructType({
+  cmd: ref.types.uint8,
+  bitmap: ref.types.uint8,
+}, {packed: true});
+
+const StructBacklight = StructType({
+  cmd: ref.types.uint8,
+  on: ref.types.bool,
+}, {packed: true});
+
+const StructSetRoomNameHdr = StructType({
+  cmd: ref.types.uint8,
+  len: ref.types.uint8,
+}, {packed: true});
+
 const StructFirmwareVersion = StructType({
   cmd : ref.types.uint8,
-  major: ref.types.uint8,
-  minor: ref.types.uint8,
+  version: ref.types.uint16,
 }, {packed: true});
 
 const StructGetUUID = StructType({
@@ -60,9 +112,48 @@ const StructSetTimeFormat = StructType({
   militaryFormat : ref.types.bool,
 }, {packed: true});
 
-const StructSetTime = StructType({
+const StructSetLocalTime = StructType({
   cmd : ref.types.uint8,
   time : ref.types.uint32,
+}, {packed: true});
+
+const StructUnconfiguredID = StructType({
+  cmd : ref.types.uint8,
+  count : ref.types.uint16,
+}, {packed: true});
+
+const StructSetTimelineHdr = StructType({
+  cmd : ref.types.uint8,
+  dayOffset : ref.types.int8,
+  count : ref.types.uint8,
+}, {packed: true});
+
+const StructTimelineEntry = StructType({
+  startTime: ref.types.uint16,
+  endTime: ref.types.uint16,
+}, {packed: true});
+
+const StructUpdateTimeline = StructType({
+  cmd : ref.types.uint8,
+  previous: ref.types.uint16,
+  startTime: ref.types.uint16,
+  endTime: ref.types.uint16,
+}, {packed: true});
+
+const StructSetMeetingInfoHdr = StructType({
+  cmd: ref.types.uint8,
+  subjectLen: ref.types.uint8,
+  organizerLen: ref.types.uint8,
+}, {packed: true});
+
+const StructSetMeetingBodyHdr = StructType({
+  cmd: ref.types.uint8,
+  len: ref.types.uint8,
+}, {packed: true});
+
+const StructSetErrorCode = StructType({
+  cmd: ref.types.uint8,
+  err: ref.types.uint8,
 }, {packed: true});
 
 export class MessageBuilder {
@@ -80,8 +171,13 @@ export class MessageBuilder {
     }).ref();
   }
 
-  public static buildRoomName(name: string): Buffer {
-    throw new Error("Method not implemented.");
+  public static buildRoomName(name: string): Buffer[] {
+    const utf8 = Buffer.from(name);
+    return [new StructSetRoomNameHdr({
+        cmd: Outgoing.SET_ROOM_NAME,
+        len: utf8.byteLength,
+      }).ref(),
+      utf8];
   }
 
   public static buildExpectedFirmwareVersion(): Buffer {
@@ -117,7 +213,7 @@ export class MessageBuilder {
       date.getHours() * 60 * 60;
     const now: number = (day << 17) | (month << 22) | (year << 26) | seconds;
 
-    return new StructSetTime({
+    return new StructSetLocalTime({
       cmd: Outgoing.SET_LOCAL_TIME,
       time: now,
     }).ref();
@@ -130,19 +226,46 @@ export class MessageBuilder {
   }
 
   public static buildUnconfiguredID(id: number): Buffer {
-    throw new Error("Method not implemented.");
+    return new StructUnconfiguredID({
+      cmd: Outgoing.SET_UNCONFIGURED_ID,
+      id,
+    }).ref();
   }
 
-  public static buildTimeline(timeline: ITimeline): Buffer {
-    throw new Error("Method not implemented.");
+  public static buildTimeline(timeline: ITimeline): Buffer[] {
+    return [new StructSetTimelineHdr({
+        cmd: Outgoing.SET_TIMELINE,
+        dayOffset: timeline.dayOffset,
+        count: timeline.entries.length,
+      }).ref(),
+      ...timeline.entries.map((i) => {
+        return new StructTimelineEntry({
+          startTime: i.start,
+          endTime: i.end,
+        }).ref();
+      }),
+    ];
   }
 
-  public static buildMeetingInfo(info: IMeetingInfo): Buffer {
-    throw new Error("Method not implemented.");
+  public static buildMeetingInfo(info: IMeetingInfo): Buffer[] {
+    const subject = Buffer.from(info.subject);
+    const organizer = Buffer.from(info.organizer);
+
+    return [new StructSetMeetingInfoHdr({
+        cmd: Outgoing.SET_MEETING_INFO,
+        subjectLen: subject.byteLength,
+        organizerLen: organizer.byteLength,
+      }).ref(),
+      subject, organizer];
   }
 
   public static buildUpdateTimeline(
-    preivous: number, now: ITimelineEntry): Buffer {
-    throw new Error("Method not implemented.");
+    previous: number, now: ITimelineEntry): Buffer {
+    return new StructUpdateTimeline({
+      cmd: Outgoing.UPDATE_TIMELINE,
+      previous,
+      startTime: now.start,
+      endTime: now.end,
+    }).ref();
   }
 }

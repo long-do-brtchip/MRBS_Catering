@@ -144,8 +144,8 @@ export class PanLService extends EventEmitter {
 
   private async onGetTimeline(
     path: PanLPath, req: ITimelineRequest): Promise<void> {
-      this.tx.send(path, [MessageBuilder.buildTimeline(
-        await this.cal.getTimeline(path, req))]);
+      this.tx.send(path, MessageBuilder.buildTimeline(
+        await this.cal.getTimeline(path, req)));
   }
 
   private async onGetMeetingInfo(
@@ -153,7 +153,7 @@ export class PanLService extends EventEmitter {
     if (getBody) {
       throw new Error("Method not implemented.");
     }
-    this.tx.send(path, [MessageBuilder.buildMeetingInfo(
+    this.tx.send(path, [...MessageBuilder.buildMeetingInfo(
       await this.cal.getMeetingInfo(path, start))]);
   }
 
@@ -218,10 +218,10 @@ export class PanLService extends EventEmitter {
         this.cal.getMeetingInfo(path, now),
       ]);
       this.tx.send(path, [
-        MessageBuilder.buildRoomName(name),
+        ...MessageBuilder.buildRoomName(name),
         MessageBuilder.buildTimeline(timeline),
-        MessageBuilder.buildMeetingInfo(info),
-      ]);
+        ...MessageBuilder.buildMeetingInfo(info),
+      ] as Buffer[]);
     } catch (err) {
       log.error(err);
     }
