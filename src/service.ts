@@ -88,13 +88,12 @@ export class PanLService extends EventEmitter {
     this.broadcastInitSettings(path.agent);
   }
 
-  private async onAgentEnd(path: PanLPath): Promise<void> {
-    return PanLService.cache.removeAgent(path.agent);
+  private onAgentEnd(path: PanLPath): void {
+    PanLService.cache.removeAgent(path.agent);
   }
 
   private onAgentError(path: PanLPath, err: Error): void {
-    // TODO: process error
-    log.error(`Agent ${path.agent} error: ${err}`);
+    log.info(`Agent ${path.agent} error: ${err}`);
   }
 
   private onTxDrain(path: PanLPath): void {
@@ -125,7 +124,7 @@ export class PanLService extends EventEmitter {
   }
 
   private onStatus(path: PanLPath, status: number): void {
-    throw new Error("Method not implemented.");
+    log.error("TODO: Method onStatus not implemented.");
   }
 
   private onGetTime(path: PanLPath): void {
@@ -135,54 +134,86 @@ export class PanLService extends EventEmitter {
 
   private onRequestFirmware(path: PanLPath): void {
     // TODO: Broadcast assets and firmware
-    throw new Error("Method not implemented.");
+    log.error("TODO: Method onRequestFirmware not implemented.");
   }
 
   private onAuth(path: PanLPath, code: number): void {
-    throw new Error("Method not implemented.");
+    log.error("TODO: Method onAuth not implemented.");
   }
 
   private async onGetTimeline(
     path: PanLPath, req: ITimelineRequest): Promise<void> {
+    try {
       this.tx.send(path, MessageBuilder.buildTimeline(
         await this.cal.getTimeline(path, req)));
+    } catch (err) {
+      log.warn(`Not able to get timeline for ${path.uid}: ${err}`);
+    }
   }
 
   private async onGetMeetingInfo(
     path: PanLPath, start: number, getBody: boolean): Promise<void> {
     if (getBody) {
-      throw new Error("Method not implemented.");
+      log.error("TODO: Parameter getBody not implemented.");
     }
-    this.tx.send(path, [...MessageBuilder.buildMeetingInfo(
-      await this.cal.getMeetingInfo(path, start))]);
+    try {
+      this.tx.send(path, MessageBuilder.buildMeetingInfo(
+          await this.cal.getMeetingInfo(path, start)));
+    } catch (err) {
+      log.warn(`Not able to get meeting info for ${path.uid}: ${err}`);
+    }
   }
 
   private onCreateBooking(path: PanLPath, start: number, end: number): void {
-    this.cal.createBooking(path, start, end);
+    try {
+      this.cal.createBooking(path, start, end);
+    } catch (err) {
+      log.warn(`Create booking failed for ${path.uid}: ${err}`);
+    }
   }
 
   private onCancelUnclaimedMeeting(path: PanLPath, start: number): void {
     if (path.dest === MessageBuilder.BROADCAST_ADDR) {
-      throw new Error("Invalid sender.");
+      log.error(`Invalid sender from agent ${path.agent}.`);
     }
-    this.cal.cancelUnclaimedMeeting(path, start);
+    try {
+      this.cal.cancelUnclaimedMeeting(path, start);
+    } catch (err) {
+      log.warn(`Cancel unclaimed meeting failed for ${path.uid}: ${err}`);
+    }
   }
 
   private onEndMeeting(path: PanLPath, start: number): void {
-    this.cal.endMeeting(path, start);
+    try {
+      this.cal.endMeeting(path, start);
+    } catch (err) {
+      log.warn(`End meeting failed for ${path.uid}: ${err}`);
+    }
   }
 
   private onCancelMeeting(path: PanLPath, start: number): void {
-    this.cal.cancelMeeting(path, start);
+    try {
+      this.cal.cancelMeeting(path, start);
+    } catch (err) {
+      log.warn(`Cancel meeting failed for ${path.uid}: ${err}`);
+    }
   }
 
   private onExtendMeeting(path: PanLPath, start: number, end: number): void {
-    this.cal.extendMeeting(path, start, end);
+    try {
+      this.cal.extendMeeting(path, start, end);
+    } catch (err) {
+      log.warn(`Extend meeting failed for ${path.uid}: ${err}`);
+    }
   }
 
   private async onUpdate(
     path: PanLPath, previous: number, now: ITimelineEntry): Promise<void> {
-    this.tx.send(path, [MessageBuilder.buildUpdateTimeline(previous, now)]);
+    try {
+      this.tx.send(path, [MessageBuilder.buildUpdateTimeline(previous, now)]);
+    } catch (err) {
+      log.warn(`Update timeline failed for ${path.uid}: ${err}`);
+    }
   }
 
   private broadcastInitSettings(agent: number): void {
@@ -198,7 +229,7 @@ export class PanLService extends EventEmitter {
     try {
       this.tx.broadcastImmediately(agent, msgs);
     } catch (err) {
-      log.error(err);
+      log.warn(`Broadcast init settings failed for agent ${agent}: ${err}`);
     }
   }
 
@@ -223,13 +254,17 @@ export class PanLService extends EventEmitter {
         ...MessageBuilder.buildMeetingInfo(info),
       ] as Buffer[]);
     } catch (err) {
-      log.error(err);
+      log.warn(`Init panel failed for path ${path.uid}: ${err}`);
     }
   }
 
   private showUnconfigured(path: PanLPath, id: number) {
-    this.tx.send(path, [
-      MessageBuilder.buildUnconfiguredID(id),
-    ]);
+    try {
+      this.tx.send(path, [
+        MessageBuilder.buildUnconfiguredID(id),
+      ]);
+    } catch (err) {
+      log.warn(`Show Unconfigured ID failed for ${path.uid}: ${err}`);
+    }
   }
 }

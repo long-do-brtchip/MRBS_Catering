@@ -3,13 +3,19 @@ import {
   EwsLogging, ExchangeService, ExchangeVersion, Folder,
   ImpersonatedUserId, Item, Uri, WebCredentials, WellKnownFolderName,
 } from "ews-javascript-api";
-import {ICalender, ITimeline, ITimelineRequest} from "./calender";
+import {Cache} from "./cache";
+import {
+  ICalender, ICalenderNotification, IMeetingInfo,
+  ITimeline, ITimelineRequest,
+} from "./calender";
+import {PanLPath} from "./path";
 import {CalenderType, ICalenderConfig} from "./persist";
 
 export class EWSCalender implements ICalender {
   private service: ExchangeService;
 
-  constructor(config: ICalenderConfig) {
+  constructor(private notify: ICalenderNotification,
+              private cache: Cache, config: ICalenderConfig) {
     EwsLogging.DebugLogEnabled = true;
     // TODO: auto detect exchange server version
 
@@ -19,7 +25,7 @@ export class EWSCalender implements ICalender {
     this.service.Url = new Uri(config.address);
   }
 
-  public async getTimeline(address: string, req: ITimelineRequest)
+  public async getTimeline(path: PanLPath, req: ITimelineRequest)
     : Promise<ITimeline> {
     // TODO: get timeline from cache first
     // await cache.getTimeline(`${address}:${req.dayOffset}`);
@@ -27,11 +33,40 @@ export class EWSCalender implements ICalender {
     const view = new CalendarView(
       DateTime.Now.Add(-14, "day"), DateTime.Now.Add(14, "day"));
     this.service.ImpersonatedUserId =
-    new ImpersonatedUserId(ConnectingIdType.SmtpAddress, address);
+    new ImpersonatedUserId(ConnectingIdType.SmtpAddress,
+      await this.cache.getRoomAddress(path));
     const ret = await this.service.FindAppointments(
       WellKnownFolderName.Calendar, view);
     // TODO: save to cache with expiry. For today's timeline,
     // the expiry time will be the end of today
+    throw new Error("Method not implemented.");
+  }
+
+  public async getMeetingInfo(
+    path: PanLPath, startTime: number): Promise<IMeetingInfo> {
+    throw new Error("Method not implemented.");
+  }
+
+  public async createBooking(
+    path: PanLPath, start: number, end: number): Promise<void> {
+    throw new Error("Method not implemented.");
+  }
+
+  public async extendMeeting(
+    path: PanLPath, start: number, end: number): Promise<void> {
+    throw new Error("Method not implemented.");
+  }
+
+  public async endMeeting(path: PanLPath, start: number): Promise<void> {
+    throw new Error("Method not implemented.");
+  }
+
+  public async cancelMeeting(path: PanLPath, start: number): Promise<void> {
+    throw new Error("Method not implemented.");
+  }
+
+  public async cancelUnclaimedMeeting(
+    path: PanLPath, start: number): Promise<void> {
     throw new Error("Method not implemented.");
   }
 }

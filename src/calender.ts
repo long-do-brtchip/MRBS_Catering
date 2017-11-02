@@ -2,6 +2,7 @@ import {EventEmitter} from "events";
 import {Cache} from "./cache";
 import {EWSCalender} from "./ews";
 import {log} from "./log";
+import {MockupCalender} from "./mockup";
 import {PanLPath} from "./path";
 import {CalenderType, Persist} from "./persist";
 
@@ -28,10 +29,21 @@ export interface ITimelineRequest {
 }
 
 export interface ICalender {
-  getTimeline(address: string, req: ITimelineRequest): Promise<ITimeline>;
+  getTimeline(path: PanLPath, req: ITimelineRequest): Promise<ITimeline>;
+  getMeetingInfo(path: PanLPath, startTime: number): Promise<IMeetingInfo>;
+  createBooking(path: PanLPath, start: number, end: number): Promise<void>;
+  extendMeeting(path: PanLPath, start: number, end: number): Promise<void>;
+  endMeeting(path: PanLPath, start: number): Promise<void>;
+  cancelMeeting(path: PanLPath, start: number): Promise<void>;
+  cancelUnclaimedMeeting(path: PanLPath, start: number): Promise<void>;
 }
 
-export class CalenderManager {
+export interface ICalenderNotification {
+  onChangeNotification(
+    path: PanLPath, previous: number, now: ITimelineEntry): void;
+}
+
+export class CalenderManager implements ICalenderNotification {
   private calender: ICalender;
   private isConnected: boolean;
 
@@ -49,45 +61,41 @@ export class CalenderManager {
     return this.isConnected;
   }
 
-  public async getTimeline(
+  public getTimeline(
     path: PanLPath, req: ITimelineRequest): Promise<ITimeline> {
-      return this.calender.getTimeline(
-        await this.cache.getRoomAddress(path), req);
+    return this.calender.getTimeline(path, req);
   }
 
-  public async getMeetingInfo(
+  public getMeetingInfo(
     path: PanLPath, startTime: number): Promise<IMeetingInfo> {
-    throw new Error("Method getMeetingInfo not implemented.");
+    return this.calender.getMeetingInfo(path, startTime);
   }
 
-  public async createBooking(
+  public createBooking(
     path: PanLPath, start: number, end: number): Promise<void> {
-    throw new Error("Method getMeetingInfo not implemented.");
+    return this.calender.createBooking(path, start, end);
   }
 
-  public async extendMeeting(
+  public extendMeeting(
     path: PanLPath, start: number, end: number): Promise<void> {
-    throw new Error("Method getMeetingInfo not implemented.");
+    return this.calender.extendMeeting(path, start, end);
   }
 
-  public async endMeeting(path: PanLPath, start: number): Promise<void> {
-    throw new Error("Method getMeetingInfo not implemented.");
+  public endMeeting(path: PanLPath, start: number): Promise<void> {
+    return this.calender.endMeeting(path, start);
   }
 
-  public async cancelMeeting(path: PanLPath, start: number): Promise<void> {
-    throw new Error("Method getMeetingInfo not implemented.");
+  public cancelMeeting(path: PanLPath, start: number): Promise<void> {
+    return this.calender.cancelMeeting(path, start);
   }
 
-  public async cancelUnclaimedMeeting(
+  public cancelUnclaimedMeeting(
     path: PanLPath, start: number): Promise<void> {
-    /* Requires no */
-    throw new Error("Method getMeetingInfo not implemented.");
+    return this.calender.cancelUnclaimedMeeting(path, start);
   }
 
-  public async onChangeNotification(
-    path: PanLPath, previous: number, now: ITimelineEntry): Promise<void> {
-    // Process calender updates, should be called from calender
-    // TODO: update cache
+  public onChangeNotification(
+    path: PanLPath, previous: number, now: ITimelineEntry): void {
     this.event.emit("update", path, previous, now);
   }
 
@@ -103,12 +111,13 @@ export class CalenderManager {
           return;
         case CalenderType.EXCHANGE:
         case CalenderType.OFFICE365:
-          this.calender = new EWSCalender(config);
+          this.calender = new EWSCalender(this, this.cache, config);
           break;
         case CalenderType.GOOGLE:
           throw new Error("Method not implemented.");
         case CalenderType.MOCKUP:
-          throw new Error("Method not implemented.");
+          this.calender = new MockupCalender(this, this.cache);
+          break;
       }
     } catch (err) {
       this.event.emit("calMgrError", err);
