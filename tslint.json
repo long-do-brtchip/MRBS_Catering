@@ -1,0 +1,15 @@
+{
+    "defaultSeverity": "error",
+    "extends": [
+        "tslint:latest"
+    ],
+    "jsRules": {},
+    "rules": {
+		"no-bitwise": false,
+		"max-line-length": [true, 80],
+		"object-literal-sort-keys": false,
+		"no-implicit-dependencies": [true, "dev"],
+		"only-arrow-functions": [true, "allow-named-functions"]
+	},
+    "rulesDirectory": []
+}
