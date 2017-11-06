@@ -6,7 +6,7 @@ import {
 import {Cache} from "./cache";
 import {
   ICalender, ICalenderNotification, IMeetingInfo,
-  ITimeline, ITimelineRequest, ITimePoint,
+  ITimelineEntry, ITimelineRequest, ITimePoint,
 } from "./calender";
 import {PanLPath} from "./path";
 import {CalenderType, ICalenderConfig} from "./persist";
@@ -26,7 +26,7 @@ export class EWSCalender implements ICalender {
   }
 
   public async getTimeline(path: PanLPath, req: ITimelineRequest)
-    : Promise<ITimeline> {
+    : Promise<ITimelineEntry[]> {
     // TODO: get timeline from cache first
     // await cache.getTimeline(`${address}:${req.dayOffset}`);
     // Cannot find timeline from cache, get from server
@@ -42,8 +42,8 @@ export class EWSCalender implements ICalender {
     throw new Error("Method not implemented.");
   }
 
-  public async getMeetingInfo(
-    path: PanLPath, startTime: number): Promise<IMeetingInfo> {
+  public async getMeetingInfo(path: PanLPath, id: ITimePoint):
+  Promise<IMeetingInfo> {
     throw new Error("Method not implemented.");
   }
 

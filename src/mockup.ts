@@ -1,7 +1,7 @@
 import {Cache} from "./cache";
 import {
   ICalender, ICalenderNotification, IMeetingInfo,
-  ITimeline, ITimelineRequest, ITimePoint,
+  ITimelineEntry, ITimelineRequest, ITimePoint,
 } from "./calender";
 import {PanLPath} from "./path";
 
@@ -11,38 +11,62 @@ export class MockupCalender implements ICalender {
   }
 
   public async getTimeline(path: PanLPath, req: ITimelineRequest)
-  : Promise<ITimeline> {
-    return ({
-      dayOffset: req.dayOffset,
-      entries: [],
-    });
+  : Promise<ITimelineEntry[]> {
+    let entries = await this.cache.getTimeline(path, req);
+    if (entries === undefined) {
+      entries = [{start: 60 * 8, end: 60 * 9}];
+      this.cache.setTimeline(path, req.id.dayOffset, entries);
+      this.cache.setMeetingInfo(path,
+        {dayOffset: req.id.dayOffset, minutesOfDay: 60 * 8},
+        {subject: `Test ${req.id.dayOffset}-1`, organizer: "Tester"});
+      this.cache.setMeetingInfo(path,
+        {dayOffset: req.id.dayOffset, minutesOfDay: 60 * 8},
+        {subject: `Test ${req.id.dayOffset}-2`, organizer: "Tester"});
+    }
+    return entries;
   }
 
-  public async getMeetingInfo(
-    path: PanLPath, startTime: number): Promise<IMeetingInfo> {
-    throw new Error("Method not implemented.");
+  public async getMeetingInfo(path: PanLPath, id: ITimePoint):
+  Promise<IMeetingInfo> {
+    return this.cache.getMeetingInfo(path, id);
   }
 
   public async createBooking(path: PanLPath, id: ITimePoint, duration: number):
   Promise<void> {
-    throw new Error("Method not implemented.");
+    await Promise.all([
+      this.cache.setTimelineEntry(path, id, duration),
+      this.cache.setMeetingInfo(path, id,
+        {subject: `Meeting booked from PanL`, organizer: "PanL"}),
+    ]);
   }
 
   public async extendMeeting(path: PanLPath, id: ITimePoint, duration: number):
   Promise<void> {
-    throw new Error("Method not implemented.");
+    await Promise.all([
+      this.cache.removeTimelineEntry(path, id),
+      this.cache.setTimelineEntry(path, id, duration),
+    ]);
   }
 
   public async endMeeting(path: PanLPath, id: ITimePoint): Promise<void> {
-    throw new Error("Method not implemented.");
+    const info = await this.cache.getMeetingInfo(path, id);
+    info.subject = `Ended: ${info.subject}`;
+    await this.cache.setMeetingInfo(path, id, info);
+    this.notify.onUpdateNotification(path, id);
   }
 
   public async cancelMeeting(path: PanLPath, id: ITimePoint): Promise<void> {
-    throw new Error("Method not implemented.");
+    const info = await this.cache.getMeetingInfo(path, id);
+    info.subject = `Cancelled: ${info.subject}`;
+    await this.cache.setMeetingInfo(path, id, info);
+    this.notify.onUpdateNotification(path, id);
   }
 
   public async cancelUnclaimedMeeting(path: PanLPath, id: ITimePoint):
   Promise<void> {
-    throw new Error("Method not implemented.");
+    const info = await this.cache.getMeetingInfo(path, id);
+    info.subject = `Unclaimed: ${info.subject}`;
+    await this.cache.setMeetingInfo(path, id, info);
+    this.notify.onUpdateNotification(path, id);
   }
 }

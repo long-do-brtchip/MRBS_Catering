@@ -1,4 +1,8 @@
 import * as redis from "ioredis";
+import {
+  IMeetingInfo, ITimelineEntry, ITimelineRequest, ITimePoint,
+} from "./calender";
+import {log} from "./log";
 import {PanLPath} from "./path";
 import {IRoom} from "./persist";
 
@@ -119,5 +123,57 @@ export class Cache {
 
   public async flush(): Promise<void> {
     this.client.flushdb();
+  }
+
+  public async setDayOffset(path: PanLPath, dayOffset: number): Promise<void> {
+    throw(new Error("TODO: Meothod not implemented"));
+  }
+
+  public async getDayOffset(path: PanLPath): Promise<number> {
+    throw(new Error("TODO: Meothod not implemented"));
+  }
+
+  public async setTimeline(path: PanLPath, dayOffset: number,
+                           entries: ITimelineEntry[]): Promise<void> {
+    throw(new Error("TODO: Meothod not implemented"));
+  }
+
+  public async getTimeline(path: PanLPath, req: ITimelineRequest):
+  Promise<ITimelineEntry[] | undefined> {
+    // TODO: return undefined is never been cached
+    // return zero length array if no meeting
+    this.updateTimelineExpiryTime(path, req.id.dayOffset);
+    throw(new Error("TODO: Meothod not implemented"));
+  }
+
+  public async setTimelineEntry(path: PanLPath, id: ITimePoint,
+                                duration: number) {
+    throw(new Error("TODO: Meothod not implemented"));
+  }
+
+  public async removeTimelineEntry(path: PanLPath, id: ITimePoint) {
+    throw(new Error("TODO: Meothod not implemented"));
+  }
+
+  public async setMeetingInfo(path: PanLPath, id: ITimePoint,
+                              info: IMeetingInfo): Promise<void> {
+    throw(new Error("TODO: Meothod not implemented"));
+  }
+
+  public async removeMeetingInfo(path: PanLPath, id: ITimePoint):
+  Promise<void> {
+    throw(new Error("TODO: Meothod not implemented"));
+  }
+
+  public async getMeetingInfo(path: PanLPath, id: ITimePoint):
+  Promise<IMeetingInfo> {
+    throw(new Error("TODO: Meothod not implemented"));
+  }
+
+  private async updateTimelineExpiryTime(path: PanLPath, dayOffset: number):
+  Promise<void> {
+    // TODO: Meetings corresponding to a timeline shall be purged out
+    // once the timeline is expired.
+    throw(new Error("TODO: Meothod not implemented"));
   }
 }

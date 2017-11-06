@@ -40,12 +40,12 @@ const StructGetMeetingInfo = StructType({
 
 const StructTime = StructType({
   dayOffset: ref.types.int8,
-  minuteOfDay: ref.types.uint16,
+  minutesOfDay: ref.types.uint16,
 }, {packed: true});
 
 const StructTimespan = StructType({
   dayOffset: ref.types.int8,
-  minuteOfDay: ref.types.uint16,
+  minutesOfDay: ref.types.uint16,
   duration: ref.types.uint16,
 }, {packed: true});
 
@@ -70,6 +70,7 @@ export class MessageParser {
     if (buffer.length >= min) {
       return buffer.slice(min);
     }
+    // TODO: concat to next buffer
     throw new Error(`Invalid message length, expect at least ${min}, ` +
       `but only got ${buffer.length}`);
   }
@@ -123,10 +124,9 @@ export class MessageParser {
           next = MessageParser.verifyLength(buffer, StructTimeline.size);
           const tl = StructTimeline(buffer);
           const req: ITimelineRequest = {
-            dayOffset: tl.offset,
+            id: {dayOffset: tl.offset, minutesOfDay: Math.abs(tl.time)},
             lookForward: tl.time >= 0,
             maxCount: tl.count,
-            startTime: Math.abs(tl.time),
           };
           this.notify("getTimeline", req);
           break;
@@ -144,34 +144,34 @@ export class MessageParser {
         case Incoming.EXTEND_MEETING: {
           next = MessageParser.verifyLength(buffer, StructTimespan.size);
           const span = StructTimespan(buffer);
-          this.notify("extendMeeting", span.dayOffset, span.minuteOfDay,
+          this.notify("extendMeeting", span.dayOffset, span.minutesOfDay,
             span.duration);
           break;
         }
         case Incoming.CREATE_BOOKING: {
           next = MessageParser.verifyLength(buffer, StructTimespan.size);
           const span = StructTimespan(buffer);
-          this.notify("createBooking", span.dayOffset, span.minuteOfDay,
+          this.notify("createBooking", span.dayOffset, span.minutesOfDay,
             span.duration);
           break;
         }
         case Incoming.CANCEL_MEETING: {
           next = MessageParser.verifyLength(buffer, StructTime.size);
           const when = StructTime(buffer);
-          this.notify("cancelMeeting", when.dayOffset, when.minuteOfDay);
+          this.notify("cancelMeeting", when.dayOffset, when.minutesOfDay);
           break;
         }
         case Incoming.END_MEETING: {
           next = MessageParser.verifyLength(buffer, StructTime.size);
           const when = StructTime(buffer);
-          this.notify("endMeeting", when.dayOffset, when.minuteOfDay);
+          this.notify("endMeeting", when.dayOffset, when.minutesOfDay);
           break;
         }
         case Incoming.CANCEL_UNCLAIM_MEETING: {
           next = MessageParser.verifyLength(buffer, StructTime.size);
           const when = StructTime(buffer);
           this.notify("cancelUnclaimedMeeting", when.dayOffset,
-            when.minuteOfDay);
+            when.minutesOfDay);
           break;
         }
         default:

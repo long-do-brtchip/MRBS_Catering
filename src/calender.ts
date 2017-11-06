@@ -11,31 +11,25 @@ export interface ITimelineEntry {
   end: number;
 }
 
-export interface ITimeline {
-  dayOffset: number;
-  entries: ITimelineEntry[];
-}
-
 export interface IMeetingInfo {
   subject: string;
   organizer: string;
 }
 
-export interface ITimelineRequest {
-  dayOffset: number;
-  lookForward: boolean;
-  maxCount: number;
-  startTime: number;
-}
-
 export interface ITimePoint {
   dayOffset: number;
-  minuteOfDay: number;
+  minutesOfDay: number;
+}
+
+export interface ITimelineRequest {
+  id: ITimePoint;
+  lookForward: boolean;
+  maxCount: number;
 }
 
 export interface ICalender {
-  getTimeline(path: PanLPath, req: ITimelineRequest): Promise<ITimeline>;
-  getMeetingInfo(path: PanLPath, startTime: number): Promise<IMeetingInfo>;
+  getTimeline(path: PanLPath, req: ITimelineRequest): Promise<ITimelineEntry[]>;
+  getMeetingInfo(path: PanLPath, id: ITimePoint): Promise<IMeetingInfo>;
   createBooking(path: PanLPath, id: ITimePoint, duration: number):
     Promise<void>;
   extendMeeting(path: PanLPath, id: ITimePoint, duration: number):
@@ -46,15 +40,13 @@ export interface ICalender {
 }
 
 export interface ICalenderNotification {
-  onMoveNotification(path: PanLPath, from: ITimePoint, to: ITimePoint,
-                     duration: number): void;
   onExtendNotification(path: PanLPath, id: ITimePoint, duration: number): void;
   onAddNotification(path: PanLPath, id: ITimePoint, duration: number): void;
   onDeleteNotification(path: PanLPath, id: ITimePoint): void;
   onUpdateNotification(path: PanLPath, id: ITimePoint): void;
 }
 
-export class CalenderManager implements ICalenderNotification, ICalender {
+export class CalenderManager implements ICalenderNotification {
   private calender: ICalender;
   private isConnected: boolean;
 
@@ -72,15 +64,16 @@ export class CalenderManager implements ICalenderNotification, ICalender {
     return this.isConnected;
   }
 
-  public getTimeline(
-    path: PanLPath, req: ITimelineRequest): Promise<ITimeline> {
+  public getTimeline(path: PanLPath, req: ITimelineRequest):
+  Promise<ITimelineEntry[]> {
+    this.cache.setDayOffset(path, req.id.dayOffset);
     return this.calender.getTimeline(path, req);
   }
 
-  public getMeetingInfo(
-    path: PanLPath, startTime: number): Promise<IMeetingInfo> {
-    // dayOffset was set in getTimeline
-    return this.calender.getMeetingInfo(path, startTime);
+  public async getMeetingInfo(path: PanLPath, minutesOfDay: number):
+  Promise<IMeetingInfo> {
+    const dayOffset: number = await this.cache.getDayOffset(path);
+    return this.calender.getMeetingInfo(path, { dayOffset, minutesOfDay });
   }
 
   public createBooking(path: PanLPath, id: ITimePoint, duration: number):
@@ -103,11 +96,6 @@ export class CalenderManager implements ICalenderNotification, ICalender {
 
   public cancelUnclaimedMeeting(path: PanLPath, id: ITimePoint): Promise<void> {
     return this.calender.cancelUnclaimedMeeting(path, id);
-  }
-
-  public onMoveNotification(path: PanLPath, from: ITimePoint, to: ITimePoint,
-                            duration: number): void {
-    this.event.emit("move", path, from, to, duration);
   }
 
   public onAddNotification(path: PanLPath, id: ITimePoint, duration: number):

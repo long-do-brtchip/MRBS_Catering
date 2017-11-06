@@ -2,8 +2,7 @@ import {EventEmitter} from "events";
 import {MessageBuilder} from "./builder";
 import {Cache} from "./cache";
 import {
-  CalenderManager, ITimeline,
-  ITimelineEntry, ITimelineRequest, ITimePoint,
+  CalenderManager, ITimelineEntry, ITimelineRequest, ITimePoint,
 } from "./calender";
 import {log} from "./log";
 import {PanLPath} from "./path";
@@ -55,7 +54,6 @@ export class PanLService extends EventEmitter {
     this.on("endMeeting", this.onEndMeeting);
     this.on("cancelUnclaimedMeeting", this.onCancelUnclaimedMeeting);
     this.on("CreateBooking", this.onCreateBooking);
-    this.on("move", this.onMove);
     this.on("add", this.onAdd);
     this.on("extend", this.onExtend);
     this.on("delete", this.onDelete);
@@ -151,20 +149,20 @@ export class PanLService extends EventEmitter {
     path: PanLPath, req: ITimelineRequest): Promise<void> {
     try {
       this.tx.send(path, MessageBuilder.buildTimeline(
-        await this.cal.getTimeline(path, req)));
+        await this.cal.getTimeline(path, req), req.id.dayOffset));
     } catch (err) {
       log.warn(`Not able to get timeline for ${path.uid}: ${err}`);
     }
   }
 
   private async onGetMeetingInfo(
-    path: PanLPath, start: number, getBody: boolean): Promise<void> {
+    path: PanLPath, minutesOfDay: number, getBody: boolean): Promise<void> {
     if (getBody) {
       log.error("TODO: Parameter getBody not implemented.");
     }
     try {
       this.tx.send(path, MessageBuilder.buildMeetingInfo(
-          await this.cal.getMeetingInfo(path, start)));
+        await this.cal.getMeetingInfo(path, minutesOfDay)));
     } catch (err) {
       log.warn(`Not able to get meeting info for ${path.uid}: ${err}`);
     }
@@ -212,18 +210,6 @@ export class PanLService extends EventEmitter {
       this.cal.cancelMeeting(path, id);
     } catch (err) {
       log.warn(`Cancel meeting failed for ${path.uid}: ${err}`);
-    }
-  }
-
-  private async onMove(
-    path: PanLPath, previous: ITimePoint, now: ITimePoint, duration: number):
-  Promise<void> {
-    try {
-      this.tx.send(path, [
-        MessageBuilder.buildMoveMeeting(previous, now, duration),
-      ]);
-    } catch (err) {
-      log.warn(`Move meeting notification failed for ${path.uid}: ${err}`);
     }
   }
 
@@ -283,21 +269,20 @@ export class PanLService extends EventEmitter {
   private async initPanel(path: PanLPath): Promise<void> {
     const now = PanLService.getMinutesPassed();
     const req: ITimelineRequest = {
-      dayOffset: 0,
+      id: {dayOffset: 0, minutesOfDay: now},
       lookForward: true,
       maxCount: 8,
-      startTime: now,
     };
 
     try {
-      const [name, timeline, info] = await Promise.all([
+      const [name, entries, info] = await Promise.all([
         PanLService.cache.getRoomName(path),
         this.cal.getTimeline(path, req),
         this.cal.getMeetingInfo(path, now),
       ]);
       this.tx.send(path, [
         ...MessageBuilder.buildRoomName(name),
-        MessageBuilder.buildTimeline(timeline),
+        MessageBuilder.buildTimeline(entries, req.id.dayOffset),
         ...MessageBuilder.buildMeetingInfo(info),
       ] as Buffer[]);
     } catch (err) {
