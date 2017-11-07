@@ -28,22 +28,33 @@ export interface ITimelineRequest {
   startTime: number;
 }
 
+export interface ITimePoint {
+  dayOffset: number;
+  minuteOfDay: number;
+}
+
 export interface ICalender {
   getTimeline(path: PanLPath, req: ITimelineRequest): Promise<ITimeline>;
   getMeetingInfo(path: PanLPath, startTime: number): Promise<IMeetingInfo>;
-  createBooking(path: PanLPath, start: number, end: number): Promise<void>;
-  extendMeeting(path: PanLPath, start: number, end: number): Promise<void>;
-  endMeeting(path: PanLPath, start: number): Promise<void>;
-  cancelMeeting(path: PanLPath, start: number): Promise<void>;
-  cancelUnclaimedMeeting(path: PanLPath, start: number): Promise<void>;
+  createBooking(path: PanLPath, id: ITimePoint, duration: number):
+    Promise<void>;
+  extendMeeting(path: PanLPath, id: ITimePoint, duration: number):
+    Promise<void>;
+  endMeeting(path: PanLPath, id: ITimePoint): Promise<void>;
+  cancelMeeting(path: PanLPath, id: ITimePoint): Promise<void>;
+  cancelUnclaimedMeeting(path: PanLPath, id: ITimePoint): Promise<void>;
 }
 
 export interface ICalenderNotification {
-  onChangeNotification(
-    path: PanLPath, previous: number, now: ITimelineEntry): void;
+  onMoveNotification(path: PanLPath, from: ITimePoint, to: ITimePoint,
+                     duration: number): void;
+  onExtendNotification(path: PanLPath, id: ITimePoint, duration: number): void;
+  onAddNotification(path: PanLPath, id: ITimePoint, duration: number): void;
+  onDeleteNotification(path: PanLPath, id: ITimePoint): void;
+  onUpdateNotification(path: PanLPath, id: ITimePoint): void;
 }
 
-export class CalenderManager implements ICalenderNotification {
+export class CalenderManager implements ICalenderNotification, ICalender {
   private calender: ICalender;
   private isConnected: boolean;
 
@@ -68,35 +79,53 @@ export class CalenderManager implements ICalenderNotification {
 
   public getMeetingInfo(
     path: PanLPath, startTime: number): Promise<IMeetingInfo> {
+    // dayOffset was set in getTimeline
     return this.calender.getMeetingInfo(path, startTime);
   }
 
-  public createBooking(
-    path: PanLPath, start: number, end: number): Promise<void> {
-    return this.calender.createBooking(path, start, end);
+  public createBooking(path: PanLPath, id: ITimePoint, duration: number):
+  Promise<void> {
+    return this.calender.createBooking(path, id, duration);
   }
 
-  public extendMeeting(
-    path: PanLPath, start: number, end: number): Promise<void> {
-    return this.calender.extendMeeting(path, start, end);
+  public extendMeeting(path: PanLPath, id: ITimePoint, duration: number):
+  Promise<void> {
+    return this.calender.extendMeeting(path, id, duration);
   }
 
-  public endMeeting(path: PanLPath, start: number): Promise<void> {
-    return this.calender.endMeeting(path, start);
+  public endMeeting(path: PanLPath, id: ITimePoint): Promise<void> {
+    return this.calender.endMeeting(path, id);
   }
 
-  public cancelMeeting(path: PanLPath, start: number): Promise<void> {
-    return this.calender.cancelMeeting(path, start);
+  public cancelMeeting(path: PanLPath, id: ITimePoint): Promise<void> {
+    return this.calender.cancelMeeting(path, id);
   }
 
-  public cancelUnclaimedMeeting(
-    path: PanLPath, start: number): Promise<void> {
-    return this.calender.cancelUnclaimedMeeting(path, start);
+  public cancelUnclaimedMeeting(path: PanLPath, id: ITimePoint): Promise<void> {
+    return this.calender.cancelUnclaimedMeeting(path, id);
   }
 
-  public onChangeNotification(
-    path: PanLPath, previous: number, now: ITimelineEntry): void {
-    this.event.emit("update", path, previous, now);
+  public onMoveNotification(path: PanLPath, from: ITimePoint, to: ITimePoint,
+                            duration: number): void {
+    this.event.emit("move", path, from, to, duration);
+  }
+
+  public onAddNotification(path: PanLPath, id: ITimePoint, duration: number):
+  void {
+    this.event.emit("add", path, id, duration);
+  }
+
+  public onExtendNotification(path: PanLPath, id: ITimePoint, duration: number):
+  void {
+    this.event.emit("extend", path, id, duration);
+  }
+
+  public onDeleteNotification(path: PanLPath, id: ITimePoint): void {
+    this.event.emit("delete", path, id);
+  }
+
+  public onUpdateNotification(path: PanLPath, id: ITimePoint): void {
+    this.event.emit("update", path, id);
   }
 
   public async connect(): Promise<void> {

@@ -1,6 +1,6 @@
 import ref = require("ref");
 import StructType = require("ref-struct");
-import {IMeetingInfo, ITimeline, ITimelineEntry} from "./calender";
+import {IMeetingInfo, ITimeline, ITimelineEntry, ITimePoint} from "./calender";
 
 enum Outgoing {
   SET_ADDRESS,
@@ -19,7 +19,11 @@ enum Outgoing {
   SET_BACKLIGHT,
   SET_ROOM_NAME,
   SET_TIMELINE,
-  UPDATE_TIMELINE,
+  MOVE_MEETING,
+  EXTEND_MEETING,
+  ADD_MEETING,
+  DEL_MEETING,
+  UPDATE_MEETING,
   SET_MEETING_INFO,
   SET_MEETING_BODY,
   SET_ERROR_CODE,
@@ -133,11 +137,39 @@ const StructTimelineEntry = StructType({
   endTime: ref.types.uint16,
 }, {packed: true});
 
-const StructUpdateTimeline = StructType({
+const StructMoveMeeting = StructType({
   cmd : ref.types.uint8,
-  previous: ref.types.uint16,
-  startTime: ref.types.uint16,
-  endTime: ref.types.uint16,
+  beforeDayOffset: ref.types.int8,
+  beforeMinutesOfDay: ref.types.uint16,
+  nowDayOffset: ref.types.uint16,
+  nowMinutesOfDay: ref.types.uint16,
+  duration: ref.types.uint16,
+}, {packed: true});
+
+const StructAddMeeting = StructType({
+  cmd : ref.types.uint8,
+  dayOffset: ref.types.int8,
+  minutesOfDay: ref.types.uint16,
+  duration: ref.types.uint16,
+}, {packed: true});
+
+const StructExtendMeeting = StructType({
+  cmd : ref.types.uint8,
+  dayOffset: ref.types.int8,
+  minutesOfDay: ref.types.uint16,
+  newDuration: ref.types.uint16,
+}, {packed: true});
+
+const StructDeleteMeeting = StructType({
+  cmd : ref.types.uint8,
+  dayOffset: ref.types.int8,
+  minutesOfDay: ref.types.uint16,
+}, {packed: true});
+
+const StructUpdateMeeting = StructType({
+  cmd : ref.types.uint8,
+  dayOffset: ref.types.int8,
+  minutesOfDay: ref.types.uint16,
 }, {packed: true});
 
 const StructSetMeetingInfoHdr = StructType({
@@ -259,13 +291,50 @@ export class MessageBuilder {
       subject, organizer];
   }
 
-  public static buildUpdateTimeline(
-    previous: number, now: ITimelineEntry): Buffer {
-    return new StructUpdateTimeline({
-      cmd: Outgoing.UPDATE_TIMELINE,
-      previous,
-      startTime: now.start,
-      endTime: now.end,
+  public static buildMoveMeeting(previous: ITimePoint, now: ITimePoint,
+                                 duration: number): Buffer {
+    return new StructMoveMeeting({
+      cmd: Outgoing.MOVE_MEETING,
+      beforeDayOffset: previous.dayOffset,
+      beforeMinutesOfDay: previous.minuteOfDay,
+      nowDayOffset: now.dayOffset,
+      nowMinutesOfDay: now.minuteOfDay,
+      duration,
+    }).ref();
+  }
+
+  public static buildAddMeeting(id: ITimePoint, duration: number): Buffer {
+    return new StructMoveMeeting({
+      cmd: Outgoing.ADD_MEETING,
+      dayOffset: id.dayOffset,
+      minutesOfDay: id.minuteOfDay,
+      duration,
+    }).ref();
+  }
+
+  public static buildExtendMeeting(id: ITimePoint, newDuration: number):
+  Buffer {
+    return new StructMoveMeeting({
+      cmd: Outgoing.EXTEND_MEETING,
+      dayOffset: id.dayOffset,
+      minutesOfDay: id.minuteOfDay,
+      newDuration,
+    }).ref();
+  }
+
+  public static buildDeleteMeeting(id: ITimePoint): Buffer {
+    return new StructMoveMeeting({
+      cmd: Outgoing.DEL_MEETING,
+      dayOffset: id.dayOffset,
+      minutesOfDay: id.minuteOfDay,
+    }).ref();
+  }
+
+  public static buildUpdateMeeting(id: ITimePoint): Buffer {
+    return new StructMoveMeeting({
+      cmd: Outgoing.UPDATE_MEETING,
+      dayOffset: id.dayOffset,
+      minutesOfDay: id.minuteOfDay,
     }).ref();
   }
 }

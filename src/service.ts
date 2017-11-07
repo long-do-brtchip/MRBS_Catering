@@ -1,8 +1,10 @@
 import {EventEmitter} from "events";
 import {MessageBuilder} from "./builder";
 import {Cache} from "./cache";
-import {CalenderManager, ITimeline,
-  ITimelineEntry, ITimelineRequest} from "./calender";
+import {
+  CalenderManager, ITimeline,
+  ITimelineEntry, ITimelineRequest, ITimePoint,
+} from "./calender";
 import {log} from "./log";
 import {PanLPath} from "./path";
 import {IRoom, Persist} from "./persist";
@@ -53,6 +55,10 @@ export class PanLService extends EventEmitter {
     this.on("endMeeting", this.onEndMeeting);
     this.on("cancelUnclaimedMeeting", this.onCancelUnclaimedMeeting);
     this.on("CreateBooking", this.onCreateBooking);
+    this.on("move", this.onMove);
+    this.on("add", this.onAdd);
+    this.on("extend", this.onExtend);
+    this.on("delete", this.onDelete);
     this.on("update", this.onUpdate);
 
     this.tx = new Transmit(PanLService.persist, this);
@@ -164,55 +170,96 @@ export class PanLService extends EventEmitter {
     }
   }
 
-  private onCreateBooking(path: PanLPath, start: number, end: number): void {
+  private onCreateBooking(path: PanLPath, id: ITimePoint, duration: number):
+  void {
     try {
-      this.cal.createBooking(path, start, end);
+      this.cal.createBooking(path, id, duration);
     } catch (err) {
       log.warn(`Create booking failed for ${path.uid}: ${err}`);
     }
   }
 
-  private onCancelUnclaimedMeeting(path: PanLPath, start: number): void {
-    if (path.dest === MessageBuilder.BROADCAST_ADDR) {
-      log.error(`Invalid sender from agent ${path.agent}.`);
-    }
+  private onExtendMeeting(path: PanLPath, id: ITimePoint, duration: number):
+  void {
     try {
-      this.cal.cancelUnclaimedMeeting(path, start);
-    } catch (err) {
-      log.warn(`Cancel unclaimed meeting failed for ${path.uid}: ${err}`);
-    }
-  }
-
-  private onEndMeeting(path: PanLPath, start: number): void {
-    try {
-      this.cal.endMeeting(path, start);
-    } catch (err) {
-      log.warn(`End meeting failed for ${path.uid}: ${err}`);
-    }
-  }
-
-  private onCancelMeeting(path: PanLPath, start: number): void {
-    try {
-      this.cal.cancelMeeting(path, start);
-    } catch (err) {
-      log.warn(`Cancel meeting failed for ${path.uid}: ${err}`);
-    }
-  }
-
-  private onExtendMeeting(path: PanLPath, start: number, end: number): void {
-    try {
-      this.cal.extendMeeting(path, start, end);
+      this.cal.extendMeeting(path, id, duration);
     } catch (err) {
       log.warn(`Extend meeting failed for ${path.uid}: ${err}`);
     }
   }
 
-  private async onUpdate(
-    path: PanLPath, previous: number, now: ITimelineEntry): Promise<void> {
+  private onCancelUnclaimedMeeting(path: PanLPath, id: ITimePoint): void {
+    if (path.dest === MessageBuilder.BROADCAST_ADDR) {
+      log.error(`Invalid sender from agent ${path.agent}.`);
+    }
     try {
-      this.tx.send(path, [MessageBuilder.buildUpdateTimeline(previous, now)]);
+      this.cal.cancelUnclaimedMeeting(path, id);
     } catch (err) {
-      log.warn(`Update timeline failed for ${path.uid}: ${err}`);
+      log.warn(`Cancel unclaimed meeting failed for ${path.uid}: ${err}`);
+    }
+  }
+
+  private onEndMeeting(path: PanLPath, id: ITimePoint): void {
+    try {
+      this.cal.endMeeting(path, id);
+    } catch (err) {
+      log.warn(`End meeting failed for ${path.uid}: ${err}`);
+    }
+  }
+
+  private onCancelMeeting(path: PanLPath, id: ITimePoint): void {
+    try {
+      this.cal.cancelMeeting(path, id);
+    } catch (err) {
+      log.warn(`Cancel meeting failed for ${path.uid}: ${err}`);
+    }
+  }
+
+  private async onMove(
+    path: PanLPath, previous: ITimePoint, now: ITimePoint, duration: number):
+  Promise<void> {
+    try {
+      this.tx.send(path, [
+        MessageBuilder.buildMoveMeeting(previous, now, duration),
+      ]);
+    } catch (err) {
+      log.warn(`Move meeting notification failed for ${path.uid}: ${err}`);
+    }
+  }
+
+  private async onExtend(
+    path: PanLPath, id: ITimePoint, newDuration: number): Promise<void> {
+    try {
+      this.tx.send(path, [MessageBuilder.buildExtendMeeting(id, newDuration)]);
+    } catch (err) {
+      log.warn(`Extend meeting notification failed for ${path.uid}: ${err}`);
+    }
+  }
+
+  private async onAdd(
+    path: PanLPath, id: ITimePoint, duration: number): Promise<void> {
+    try {
+      this.tx.send(path, [MessageBuilder.buildAddMeeting(id, duration)]);
+    } catch (err) {
+      log.warn(`Add meeting notification failed for ${path.uid}: ${err}`);
+    }
+  }
+
+  private async onDelete(
+    path: PanLPath, id: ITimePoint): Promise<void> {
+    try {
+      this.tx.send(path, [MessageBuilder.buildDeleteMeeting(id)]);
+    } catch (err) {
+      log.warn(`Delete meeting notification failed for ${path.uid}: ${err}`);
+    }
+  }
+
+  private async onUpdate(
+    path: PanLPath, id: ITimePoint): Promise<void> {
+    try {
+      this.tx.send(path, [MessageBuilder.buildUpdateMeeting(id)]);
+    } catch (err) {
+      log.warn(`Update meeting notification failed for ${path.uid}: ${err}`);
     }
   }
 

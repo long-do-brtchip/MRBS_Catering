@@ -1,7 +1,7 @@
 import {Cache} from "./cache";
 import {
   ICalender, ICalenderNotification, IMeetingInfo,
-  ITimeline, ITimelineRequest,
+  ITimeline, ITimelineRequest, ITimePoint,
 } from "./calender";
 import {PanLPath} from "./path";
 
@@ -23,26 +23,26 @@ export class MockupCalender implements ICalender {
     throw new Error("Method not implemented.");
   }
 
-  public async createBooking(
-    path: PanLPath, start: number, end: number): Promise<void> {
+  public async createBooking(path: PanLPath, id: ITimePoint, duration: number):
+  Promise<void> {
     throw new Error("Method not implemented.");
   }
 
-  public async extendMeeting(
-    path: PanLPath, start: number, end: number): Promise<void> {
+  public async extendMeeting(path: PanLPath, id: ITimePoint, duration: number):
+  Promise<void> {
     throw new Error("Method not implemented.");
   }
 
-  public async endMeeting(path: PanLPath, start: number): Promise<void> {
+  public async endMeeting(path: PanLPath, id: ITimePoint): Promise<void> {
     throw new Error("Method not implemented.");
   }
 
-  public async cancelMeeting(path: PanLPath, start: number): Promise<void> {
+  public async cancelMeeting(path: PanLPath, id: ITimePoint): Promise<void> {
     throw new Error("Method not implemented.");
   }
 
-  public async cancelUnclaimedMeeting(
-    path: PanLPath, start: number): Promise<void> {
+  public async cancelUnclaimedMeeting(path: PanLPath, id: ITimePoint):
+  Promise<void> {
     throw new Error("Method not implemented.");
   }
 }
