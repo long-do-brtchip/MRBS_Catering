@@ -42,11 +42,6 @@ export class EWSCalender implements ICalender {
     throw new Error("Method not implemented.");
   }
 
-  public async getMeetingInfo(path: PanLPath, id: ITimePoint):
-  Promise<IMeetingInfo> {
-    throw new Error("Method not implemented.");
-  }
-
   public async createBooking(path: PanLPath, id: ITimePoint, duration: number):
   Promise<void> {
     throw new Error("Method not implemented.");

@@ -12,23 +12,14 @@ export class MockupCalender implements ICalender {
 
   public async getTimeline(path: PanLPath, req: ITimelineRequest)
   : Promise<ITimelineEntry[]> {
-    let entries = await this.cache.getTimeline(path, req);
-    if (entries === undefined) {
-      entries = [{start: 60 * 8, end: 60 * 9}];
-      this.cache.setTimeline(path, req.id.dayOffset, entries);
-      this.cache.setMeetingInfo(path,
-        {dayOffset: req.id.dayOffset, minutesOfDay: 60 * 8},
-        {subject: `Test ${req.id.dayOffset}-1`, organizer: "Tester"});
-      this.cache.setMeetingInfo(path,
-        {dayOffset: req.id.dayOffset, minutesOfDay: 60 * 8},
-        {subject: `Test ${req.id.dayOffset}-2`, organizer: "Tester"});
-    }
+    const entries: ITimelineEntry[] = [{start: 60 * 8, end: 60 * 9}];
+    this.cache.setMeetingInfo(path,
+      {dayOffset: req.id.dayOffset, minutesOfDay: 60 * 8},
+      {subject: `Test ${req.id.dayOffset}-1`, organizer: "Tester"});
+    this.cache.setMeetingInfo(path,
+      {dayOffset: req.id.dayOffset, minutesOfDay: 60 * 8},
+      {subject: `Test ${req.id.dayOffset}-2`, organizer: "Tester"});
     return entries;
-  }
-
-  public async getMeetingInfo(path: PanLPath, id: ITimePoint):
-  Promise<IMeetingInfo> {
-    return this.cache.getMeetingInfo(path, id);
   }
 
   public async createBooking(path: PanLPath, id: ITimePoint, duration: number):
@@ -42,10 +33,7 @@ export class MockupCalender implements ICalender {
 
   public async extendMeeting(path: PanLPath, id: ITimePoint, duration: number):
   Promise<void> {
-    await Promise.all([
-      this.cache.removeTimelineEntry(path, id),
-      this.cache.setTimelineEntry(path, id, duration),
-    ]);
+    this.notify.onExtendNotification(path, id, duration);
   }
 
   public async endMeeting(path: PanLPath, id: ITimePoint): Promise<void> {

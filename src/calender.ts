@@ -29,7 +29,6 @@ export interface ITimelineRequest {
 
 export interface ICalender {
   getTimeline(path: PanLPath, req: ITimelineRequest): Promise<ITimelineEntry[]>;
-  getMeetingInfo(path: PanLPath, id: ITimePoint): Promise<IMeetingInfo>;
   createBooking(path: PanLPath, id: ITimePoint, duration: number):
     Promise<void>;
   extendMeeting(path: PanLPath, id: ITimePoint, duration: number):
@@ -64,16 +63,22 @@ export class CalenderManager implements ICalenderNotification {
     return this.isConnected;
   }
 
-  public getTimeline(path: PanLPath, req: ITimelineRequest):
+  public async getTimeline(path: PanLPath, req: ITimelineRequest):
   Promise<ITimelineEntry[]> {
     this.cache.setDayOffset(path, req.id.dayOffset);
-    return this.calender.getTimeline(path, req);
+    let entries = await this.cache.getTimeline(path, req);
+    if (entries === undefined) {
+      entries = await this.calender.getTimeline(path, req);
+      this.cache.setTimeline(path, req.id.dayOffset, entries);
+    }
+    return entries;
   }
 
   public async getMeetingInfo(path: PanLPath, minutesOfDay: number):
   Promise<IMeetingInfo> {
     const dayOffset: number = await this.cache.getDayOffset(path);
-    return this.calender.getMeetingInfo(path, { dayOffset, minutesOfDay });
+    const id: ITimePoint = { dayOffset, minutesOfDay };
+    return this.cache.getMeetingInfo(path, id);
   }
 
   public createBooking(path: PanLPath, id: ITimePoint, duration: number):
@@ -100,15 +105,19 @@ export class CalenderManager implements ICalenderNotification {
 
   public onAddNotification(path: PanLPath, id: ITimePoint, duration: number):
   void {
+    this.cache.setTimelineEntry(path, id, duration);
     this.event.emit("add", path, id, duration);
   }
 
   public onExtendNotification(path: PanLPath, id: ITimePoint, duration: number):
   void {
+    this.cache.setTimelineEntry(path, id, duration);
     this.event.emit("extend", path, id, duration);
   }
 
   public onDeleteNotification(path: PanLPath, id: ITimePoint): void {
+    this.cache.removeTimelineEntry(path, id);
+    this.cache.removeMeetingInfo(path, id);
     this.event.emit("delete", path, id);
   }
 
