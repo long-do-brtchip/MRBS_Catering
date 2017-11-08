@@ -57,7 +57,8 @@
   ],
   "include": [
     "src/**/*.ts",
-    "test/**/*.ts"
+    "test/**/*.ts",
+    "utils/**/*.ts"
   ],
   "exclude": [
     "dist",

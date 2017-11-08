@@ -16,41 +16,47 @@ describe("Cache module", () => {
   });
 
   describe("Unconfigured ID", () => {
+    const uuids: Buffer[] = [
+      new Buffer([0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08]),
+      new Buffer([0x02, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08]),
+      new Buffer([0x03, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08]),
+    ];
     it("flush should reset number", async () => {
       const results = await Promise.all([
-        cache.addUnconfigured(new PanLPath(1, 1)),
-        cache.addUnconfigured(new PanLPath(1, 2)),
+        cache.addUnconfigured(new PanLPath(1, 1), uuids[0]),
+        cache.addUnconfigured(new PanLPath(1, 2), uuids[1]),
       ]);
       await cache.flush();
-      const now = await cache.addUnconfigured(new PanLPath(1, 2));
+      const now = await cache.addUnconfigured(new PanLPath(1, 2), uuids[1]);
       expect(results[0]).to.equal(now);
     });
     it("should increase for new path", async () => {
       await cache.flush();
       const results = await Promise.all([
-        cache.addUnconfigured(new PanLPath(1, 1)),
-        cache.addUnconfigured(new PanLPath(1, 2)),
-        cache.addUnconfigured(new PanLPath(1, 3)),
+        cache.addUnconfigured(new PanLPath(1, 1), uuids[0]),
+        cache.addUnconfigured(new PanLPath(1, 2), uuids[1]),
+        cache.addUnconfigured(new PanLPath(1, 3), uuids[2]),
       ]);
       expect(results[0] + 2).to.equal(results[2]);
     });
     it("should be the same for the same path", async () => {
-      expect(await cache.addUnconfigured(new PanLPath(1, 1))).to.equal(
-        await cache.addUnconfigured(new PanLPath(1, 1)));
+      expect(await cache.addUnconfigured(new PanLPath(1, 1), uuids[0]))
+        .to.equal(await cache.addUnconfigured(new PanLPath(1, 1), uuids[0]));
     });
     it("should be the same after reconnect database", async () => {
-      const id = await cache.addUnconfigured(new PanLPath(1, 1));
+      const id = await cache.addUnconfigured(new PanLPath(1, 1), uuids[0]);
       await cache.stop();
       cache = await Cache.getInstance();
       expect(id).to.equal(
-        await cache.addUnconfigured(new PanLPath(1, 1)));
+        await cache.addUnconfigured(new PanLPath(1, 1), uuids[0]));
       expect(id).to.not.equal(
-        await cache.addUnconfigured(new PanLPath(1, 2)));
+        await cache.addUnconfigured(new PanLPath(1, 2), uuids[1]));
     });
     it("should be the same after reconnect agent", async () => {
-      const id = await cache.addUnconfigured(new PanLPath(1, 1));
+      const id = await cache.addUnconfigured(new PanLPath(1, 1), uuids[0]);
       await cache.removeAgent(1);
-      expect(await cache.addUnconfigured(new PanLPath(1, 1))).to.equal(id);
+      expect(await cache.addUnconfigured(new PanLPath(1, 1), uuids[0]))
+        .to.equal(id);
     });
   });
   const path1 = new PanLPath(1, 1);
@@ -58,7 +64,8 @@ describe("Cache module", () => {
   describe("Configured ID", () => {
     it("should linked to room name and address", async () => {
       const path4 = new PanLPath(1, 4);
-      await cache.addUnconfigured(path1);
+      await cache.addUnconfigured(path1,
+        new Buffer([0x04, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08]));
       await cache.addConfigured(
         path1, {address: "test1@ftdi.local", name: "Test Room 1"});
       await cache.addConfigured(

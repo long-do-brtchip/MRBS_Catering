@@ -116,7 +116,7 @@ export class PanLService extends EventEmitter {
       }
     } else {
       this.showUnconfigured(path,
-        await PanLService.cache.addUnconfigured(path));
+        await PanLService.cache.addUnconfigured(path, uuid));
     }
   }
 

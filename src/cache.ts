@@ -31,8 +31,16 @@ export class Cache {
   private static readonly SEQUENCE_KEY: string = "sequence";
   private static readonly PENDING_KEY: string = "pending";
 
-  private static unconfiguredKey(path: PanLPath): string {
-    return `init:${path.uid}`;
+  private static pathToIdKey(path: PanLPath): string {
+    return `path-id:${path.uid}`;
+  }
+
+  private static idToUuidKey(idx: number): string {
+    return `id-uuid:${idx}`;
+  }
+
+  private static idToPathKey(idx: number): string {
+    return `id-path:${idx}`;
   }
 
   private static addressKey(path: PanLPath): string {
@@ -73,8 +81,11 @@ export class Cache {
   }
 
   public async addConfigured(path: PanLPath, room: IRoom): Promise<void> {
-    if (await this.client.exists(Cache.unconfiguredKey(path))) {
-      await this.client.del(Cache.unconfiguredKey(path));
+    if (await this.client.exists(Cache.pathToIdKey(path))) {
+      const id = await this.client.get(Cache.pathToIdKey(path));
+      this.client.del(Cache.pathToIdKey(path));
+      this.client.del(Cache.idToPathKey(id));
+      this.client.del(Cache.idToUuidKey(id));
     }
     await Promise.all([
       this.client.set(Cache.nameKey(path), room.name),
@@ -83,13 +94,25 @@ export class Cache {
     ]);
   }
 
-  public async addUnconfigured(path: PanLPath): Promise<number> {
-    if (await this.client.exists(Cache.unconfiguredKey(path))) {
-      return this.client.get(Cache.unconfiguredKey(path));
+  public async addUnconfigured(path: PanLPath, uuid: Buffer): Promise<number> {
+    if (await this.client.exists(Cache.pathToIdKey(path))) {
+      const id = await this.client.get(Cache.pathToIdKey(path));
+      this.client.set(Cache.idToUuidKey(id), uuid);
+      return this.client.get(Cache.pathToIdKey(path));
     }
     const idx = await this.client.incr(Cache.SEQUENCE_KEY) as number;
-    this.client.set(Cache.unconfiguredKey(path), idx);
+    this.client.set(Cache.idToUuidKey(idx), uuid);
+    this.client.set(Cache.idToPathKey(idx), path);
+    this.client.set(Cache.pathToIdKey(path), idx);
     return idx;
+  }
+
+  public async getUnconfigured(idx: number):
+  Promise<[PanLPath | null, Buffer | null]> {
+    return Promise.all([
+      this.client.get(Cache.idToPathKey(idx)),
+      this.client.getBuffer(Cache.idToUuidKey(idx)),
+    ]);
   }
 
   public async removeAgent(agent: number): Promise<void> {
