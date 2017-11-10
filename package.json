@@ -39,7 +39,7 @@
     "ref-struct": "^1.1.0",
     "reflect-metadata": "^0.1.10",
     "sqlite3": "^3.1.13",
-    "typeorm": "^0.1.1",
+    "typeorm": "^0.1.2",
     "winston": "^2.4.0"
   },
   "devDependencies": {
@@ -49,7 +49,7 @@
     "@types/ioredis": "0.0.25",
     "@types/mocha": "^2.2.43",
     "@types/moment-timezone": "^0.5.0",
-    "@types/node": "^8.0.46",
+    "@types/node": "^8.0.50",
     "@types/ref": "0.0.28",
     "@types/rewire": "^2.5.28",
     "@types/uuid": "^3.4.3",
