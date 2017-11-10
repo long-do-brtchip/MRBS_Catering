@@ -28,4 +28,8 @@ export class PanLPath {
     this.mstpAddress  = MessageBuilder.BROADCAST_ADDR;
     return this;
   }
+
+  public toString = (): string => {
+    return `PanL${this.agentID}-${this.mstpAddress}`;
+  }
 }

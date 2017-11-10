@@ -136,7 +136,7 @@ export class Cache {
   public async getRoomName(path: PanLPath): Promise<string> {
     const val = await this.client.get(Cache.nameKey(path));
     if (val === null) {
-      throw(new Error(`Can't find room name for path ${path.uid}`));
+      throw(new Error(`Can't find room name for ${path}`));
     }
     return val;
   }
@@ -144,7 +144,7 @@ export class Cache {
   public async getRoomAddress(path: PanLPath): Promise<string> {
     const val = await this.client.get(Cache.addressKey(path));
     if (val === null) {
-      throw(new Error(`Can't find room address for path ${path.uid}`));
+      throw(new Error(`Can't find room address for ${path}`));
     }
     return val;
   }

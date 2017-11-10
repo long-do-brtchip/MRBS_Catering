@@ -89,10 +89,12 @@ export class PanLService extends EventEmitter {
 
   private onAgentConnected(path: PanLPath): void {
     /* Send command to ask PanLs report UUID */
+    log.debug(`Agent ${path.agent} connected`);
     this.broadcastInitSettings(path.agent);
   }
 
   private onAgentEnd(path: PanLPath): void {
+    log.debug(`Agent ${path.agent} end`);
     PanLService.cache.removeAgent(path.agent);
   }
 
@@ -148,10 +150,11 @@ export class PanLService extends EventEmitter {
   private async onGetTimeline(
     path: PanLPath, req: ITimelineRequest): Promise<void> {
     try {
+      log.debug(`Send timeline to ${path}`);
       this.tx.send(path, MessageBuilder.buildTimeline(
         await this.cal.getTimeline(path, req), req.id.dayOffset));
     } catch (err) {
-      log.warn(`Not able to get timeline for ${path.uid}: ${err}`);
+      log.warn(`Not able to get timeline for ${path}: ${err}`);
     }
   }
 
@@ -164,7 +167,7 @@ export class PanLService extends EventEmitter {
       this.tx.send(path, MessageBuilder.buildMeetingInfo(
         await this.cal.getMeetingInfo(path, minutesOfDay)));
     } catch (err) {
-      log.warn(`Not able to get meeting info for ${path.uid}: ${err}`);
+      log.warn(`Not able to get meeting info for ${path}: ${err}`);
     }
   }
 
@@ -173,7 +176,7 @@ export class PanLService extends EventEmitter {
     try {
       this.cal.createBooking(path, id, duration);
     } catch (err) {
-      log.warn(`Create booking failed for ${path.uid}: ${err}`);
+      log.warn(`Create booking failed for ${path}: ${err}`);
     }
   }
 
@@ -182,7 +185,7 @@ export class PanLService extends EventEmitter {
     try {
       this.cal.extendMeeting(path, id, duration);
     } catch (err) {
-      log.warn(`Extend meeting failed for ${path.uid}: ${err}`);
+      log.warn(`Extend meeting failed for ${path}: ${err}`);
     }
   }
 
@@ -193,7 +196,7 @@ export class PanLService extends EventEmitter {
     try {
       this.cal.cancelUnclaimedMeeting(path, id);
     } catch (err) {
-      log.warn(`Cancel unclaimed meeting failed for ${path.uid}: ${err}`);
+      log.warn(`Cancel unclaimed meeting failed for ${path}: ${err}`);
     }
   }
 
@@ -201,7 +204,7 @@ export class PanLService extends EventEmitter {
     try {
       this.cal.endMeeting(path, id);
     } catch (err) {
-      log.warn(`End meeting failed for ${path.uid}: ${err}`);
+      log.warn(`End meeting failed for ${path}: ${err}`);
     }
   }
 
@@ -209,7 +212,7 @@ export class PanLService extends EventEmitter {
     try {
       this.cal.cancelMeeting(path, id);
     } catch (err) {
-      log.warn(`Cancel meeting failed for ${path.uid}: ${err}`);
+      log.warn(`Cancel meeting failed for ${path}: ${err}`);
     }
   }
 
@@ -218,7 +221,7 @@ export class PanLService extends EventEmitter {
     try {
       this.tx.send(path, [MessageBuilder.buildExtendMeeting(id, newDuration)]);
     } catch (err) {
-      log.warn(`Extend meeting notification failed for ${path.uid}: ${err}`);
+      log.warn(`Extend meeting notification failed for ${path}: ${err}`);
     }
   }
 
@@ -227,7 +230,7 @@ export class PanLService extends EventEmitter {
     try {
       this.tx.send(path, [MessageBuilder.buildAddMeeting(id, duration)]);
     } catch (err) {
-      log.warn(`Add meeting notification failed for ${path.uid}: ${err}`);
+      log.warn(`Add meeting notification failed for ${path}: ${err}`);
     }
   }
 
@@ -236,7 +239,7 @@ export class PanLService extends EventEmitter {
     try {
       this.tx.send(path, [MessageBuilder.buildDeleteMeeting(id)]);
     } catch (err) {
-      log.warn(`Delete meeting notification failed for ${path.uid}: ${err}`);
+      log.warn(`Delete meeting notification failed for ${path}: ${err}`);
     }
   }
 
@@ -245,7 +248,7 @@ export class PanLService extends EventEmitter {
     try {
       this.tx.send(path, [MessageBuilder.buildUpdateMeeting(id)]);
     } catch (err) {
-      log.warn(`Update meeting notification failed for ${path.uid}: ${err}`);
+      log.warn(`Update meeting notification failed for ${path}: ${err}`);
     }
   }
 
@@ -260,6 +263,7 @@ export class PanLService extends EventEmitter {
     ];
     /* Broadcast init settings to single agent */
     try {
+      log.debug(`Broadcast init settings to agent ${agent}`);
       this.tx.broadcastImmediately(agent, msgs);
     } catch (err) {
       log.warn(`Broadcast init settings failed for agent ${agent}: ${err}`);
@@ -280,23 +284,25 @@ export class PanLService extends EventEmitter {
         this.cal.getTimeline(path, req),
         this.cal.getMeetingInfo(path, now),
       ]);
+      log.debug(`Request ${path} set room name to ${name}`);
       this.tx.send(path, [
         ...MessageBuilder.buildRoomName(name),
         MessageBuilder.buildTimeline(entries, req.id.dayOffset),
         ...MessageBuilder.buildMeetingInfo(info),
       ] as Buffer[]);
     } catch (err) {
-      log.warn(`Init panel failed for path ${path.uid}: ${err}`);
+      log.warn(`Init panel failed for ${path}: ${err}`);
     }
   }
 
   private showUnconfigured(path: PanLPath, id: number) {
     try {
+      log.debug(`Request ${path} show id ${id}`);
       this.tx.send(path, [
         MessageBuilder.buildUnconfiguredID(id),
       ]);
     } catch (err) {
-      log.warn(`Show Unconfigured ID failed for ${path.uid}: ${err}`);
+      log.warn(`Show Unconfigured ID failed for ${path}: ${err}`);
     }
   }
 }

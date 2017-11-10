@@ -2,6 +2,7 @@ import {EventEmitter} from "events";
 import ref = require("ref");
 import StructType = require("ref-struct");
 import {ITimelineRequest} from "./calender";
+import {log} from "./log";
 import {PanLPath} from "./path";
 
 enum Incoming {
@@ -78,6 +79,7 @@ export class MessageParser {
   public path: PanLPath;
 
   constructor(private event: EventEmitter, id: number) {
+    log.silly(`Create MessageParser for agent ${id}`);
     this.path = new PanLPath(id, 0);
     this.notify("agentConnected");
   }

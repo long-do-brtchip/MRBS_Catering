@@ -21,17 +21,22 @@ export class PanLSocketController implements IMessageTransport {
       socket.on("data", (data) => {
           if (s.parser) {
             try {
+              log.silly(`Received data from agent ${s.parser.path.agent}: ` +
+                data);
               s.parser.onData(data);
             } catch (e) {
+              log.debug(`Received malformatted data ${data}, close socket.`);
               socket.end();
             }
           } else {
             MessageParser.parseAgentID(data).then((buf) => {
               this.persist.getAgentId(buf).then((id) => {
+                log.info(`Agent ${buf} is using id: ${id}`);
                 this.sockets.set(id, socket);
                 s.parser = new MessageParser(this.event, id);
               });
             }).catch((reject) => {
+              log.debug(`Received non Agent ID data ${data}, close socket.`);
               socket.end();
             });
           }
@@ -39,6 +44,7 @@ export class PanLSocketController implements IMessageTransport {
 
       socket.on("end", () => {
         if (s.parser !== void 0) {
+          log.debug("Received socket end event");
           this.sockets.delete(s.parser.path.agent);
           s.parser.notify("agentEnd");
         }
@@ -46,18 +52,21 @@ export class PanLSocketController implements IMessageTransport {
 
       socket.on("error", (err) => {
         if (s.parser !== void 0) {
+          log.debug("Received socket error event");
           this.sockets.delete(s.parser.path.agent);
           s.parser.notify("agentError", err);
         }
       });
 
       socket.on("drain", () => {
+        log.silly("Received socket drain event");
         if (s.parser !== void 0) {
           s.parser.notify("txDrain");
         }
       });
 
       socket.on("timeout", () => {
+        log.debug("Received socket timeout event");
         throw new Error("Method not implemented.");
       });
 

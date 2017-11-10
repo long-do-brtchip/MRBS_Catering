@@ -16,7 +16,7 @@ switch (process.env.NODE_ENV) {
     break;
   default:
     log = new Logger({
-      level: "verbose",
+      level: "silly",
       transports: [
         new transports.Console({colorize: true}),
       ],

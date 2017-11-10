@@ -79,7 +79,7 @@ export class Persist {
       // return {type: CalenderType.UNCONFIGURED, address: "",
       // username: "", password: "", readonly: true};
       return {
-        type: CalenderType.OFFICE365,
+        type: CalenderType.MOCKUP,
         address: "https://outlook.office365.com/EWS/Exchange.asmx",
         username: "tan@hanhzz.onmicrosoft.com",
         password: "T@nt3sting",
