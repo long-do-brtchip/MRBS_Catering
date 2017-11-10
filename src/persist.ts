@@ -30,6 +30,7 @@ export interface ICalenderConfig {
 export interface IHubConfig {
   localAuthDB: boolean;
   remoteAuthDB: string;
+  expiry: number;
 }
 
 export interface IPanLConfig {
@@ -149,6 +150,33 @@ export class Persist {
     if (link !== undefined) {
       await link.remove();
     }
+  }
+
+  public async getHubConfig(): Promise<IHubConfig> {
+    const v = await Config.findOne(
+      {where: {id: ConfigType.HUB_CONFIG}}) as Config;
+
+    if (v === undefined) {
+      // TODO: set default to UNCONFIGURED
+      return {
+        localAuthDB: true,
+        remoteAuthDB: "abc...",
+        expiry: 180,
+      };
+    } else {
+      return JSON.parse(v.val);
+    }
+  }
+
+  public async setHubConfig(cfg: IHubConfig): Promise<void> {
+    let v = await Config.findOne(
+      {where: {id: ConfigType.HUB_CONFIG}}) as Config;
+    if (v === undefined) {
+      v = new Config();
+      v.id = ConfigType.HUB_CONFIG;
+    }
+    v.val = JSON.stringify(cfg);
+    v.save();
   }
 
   private addRef(): void {

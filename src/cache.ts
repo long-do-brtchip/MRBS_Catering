@@ -1,10 +1,12 @@
 import * as redis from "ioredis";
 import {
-  IMeetingInfo, ITimelineEntry, ITimelineRequest, ITimePoint,
+  IMeetingInfo, ITimelineEntry,
+  ITimelineRequest, ITimePoint,
 } from "./calender";
 import {log} from "./log";
 import {PanLPath} from "./path";
-import {IRoom} from "./persist";
+import {IRoom, Persist} from "./persist";
+import {Time} from "./time";
 
 declare type PendingHandler = (path: PanLPath) => void;
 
@@ -14,12 +16,27 @@ export class Cache {
       Cache.instance.addRef();
       return Cache.instance;
     }
+
     return new Promise<Cache>((resolve, reject) => {
       const client = new redis();
-      client.on("ready", () => {
+      client.on("ready", async () => {
         client.set(Cache.SEQUENCE_KEY, 0);
-        Cache.instance = new Cache(client);
-        resolve(Cache.instance);
+        const persist = await Persist.getInstance();
+        const config = await persist.getHubConfig();
+        await persist.stop();
+
+        const observer = new redis();
+        observer.on("ready", async () => {
+          await observer.config("SET", "notify-keyspace-events", "Ex");
+          await observer.psubscribe("__keyevent@0__:expired");
+          Cache.instance = new Cache(client, observer);
+          Cache.instance.setExpiry(config.expiry);
+          resolve(Cache.instance);
+        });
+        observer.on("error", (error) => {
+          client.quit();
+          reject(error);
+        });
       });
       client.on("error", (error) => {
         reject(error);
@@ -31,6 +48,7 @@ export class Cache {
 
   private static readonly SEQUENCE_KEY: string = "sequence";
   private static readonly PENDING_KEY: string = "pending";
+  private static readonly SHADOW_TL_KEY: string = "shadow:timeline";
 
   private static pathToIdKey(path: PanLPath): string {
     return `path-id:${path.uid}`;
@@ -56,12 +74,51 @@ export class Cache {
     return `agent:${agent}`;
   }
 
-  private constructor(private client: redis.Redis, private refCnt = 1) {
+  private static dayOffsetKey(path: PanLPath): string {
+    return `day_offset:${path.uid}`;
+  }
+
+  private static hashMeetingKeyByTimePoint(path: PanLPath, id: ITimePoint):
+  string {
+    const dateStr = Time.dayOffsetToString(id.dayOffset);
+    return `meeting:${path.uid}:${dateStr}:${id.minutesOfDay}`;
+  }
+
+  private static hashMeetingIdKeyByTimePoint(path: PanLPath, id: ITimePoint):
+  string {
+    const dateStr = Time.dayOffsetToString(id.dayOffset);
+    return `meeting_id:${path.uid}:${dateStr}:${id.minutesOfDay}`;
+  }
+
+  private static hashTimelineKey(path: PanLPath,
+                                 dayOffset: number, start: number): string {
+    // roomAddress:date:startTime
+    const dateStr = Time.dayOffsetToString(dayOffset);
+    return `timeline:${path.uid}:${dateStr}:${start}`;
+  }
+
+  private static hashTimelineKeyByTimePoint(path: PanLPath, id: ITimePoint):
+  string {
+    const dateStr = Time.dayOffsetToString(id.dayOffset);
+    return `timeline:${path.uid}:${dateStr}:${id.minutesOfDay}`;
+  }
+
+  private static shadowTimeLineEntryKey(key: string): string {
+    return `shadow:${key}`;
+  }
+
+  private expiry = 0;
+
+  private constructor(private client: redis.Redis,
+                      private observer: redis.Redis,
+                      private refCnt = 1) {
+    this.setOnKeyExpired();
   }
 
   public async stop(): Promise<void> {
     if (--this.refCnt === 0) {
       log.silly("Close redis connection");
+      await this.observer.quit();
       await this.client.quit();
       Cache.instance = undefined;
     }
@@ -158,55 +215,202 @@ export class Cache {
   }
 
   public async setDayOffset(path: PanLPath, dayOffset: number): Promise<void> {
-    throw(new Error("TODO: Meothod not implemented"));
+    await this.client.set(Cache.dayOffsetKey(path), dayOffset);
   }
 
   public async getDayOffset(path: PanLPath): Promise<number> {
-    throw(new Error("TODO: Meothod not implemented"));
+    const val = this.client.get(Cache.dayOffsetKey(path));
+    if (val === null) {
+      throw(new Error(`Can't find dayOffset`));
+    }
+    return val;
   }
 
   public async setTimeline(path: PanLPath, dayOffset: number,
-                           entries: ITimelineEntry[]): Promise<void> {
-    throw(new Error("TODO: Meothod not implemented"));
+                           entries: ITimelineEntry[] | any[]): Promise<void> {
+    const pipeline: redis.Pipeline = this.client.pipeline();
+    const expiry: number = (dayOffset === 0) ?
+      Time.restDaySeconds() : this.expiry;
+
+    for (const entry of entries) {
+      // create pattern key
+      const timelineKeys: string =
+        Cache.hashTimelineKey(path, dayOffset, entry.start);
+      const shadowKey: string = Cache.shadowTimeLineEntryKey(timelineKeys);
+      // save hash timeline
+      pipeline.hmset(timelineKeys, entry);
+      pipeline.set(shadowKey, "");
+      pipeline.expire(shadowKey, expiry);
+    }
+
+    // execute all command async
+    await pipeline.exec();
   }
 
   public async getTimeline(path: PanLPath, req: ITimelineRequest):
   Promise<ITimelineEntry[] | undefined> {
-    // TODO: return undefined is never been cached
+    // return undefined is never been cached
     // return zero length array if no meeting
+    let result: ITimelineEntry[] = [];
+    const dayStr: string = Time.dayOffsetToString(req.id.dayOffset);
+    const keyFullDay: string[] = await this.scan(
+      `timeline:${path.uid}:${dayStr}:*`);
+
+    if (!keyFullDay || !keyFullDay.length) {
+      return;
+    }
+
+    const keys: string[] = Time.filterTimeLineKeys(keyFullDay, req);
+    if (!keys || !keys.length) {
+      return result;
+    }
+
+    const pipeline: redis.Pipeline = this.client.pipeline();
+    for (const key of keys) {
+      pipeline.hgetall(key);
+    }
+    // [[error, ITimelineEntry], [error, ITimelineEntry]]
+    const response: any[][] = await pipeline.exec();
+
+    result = response.map((val) => {
+      return {
+        start: parseInt(val[1].start, 10),
+        end: parseInt(val[1].end, 10),
+      };
+    });
+
+    // update expiry time of full day
     this.updateTimelineExpiryTime(path, req.id.dayOffset);
-    throw(new Error("TODO: Meothod not implemented"));
+
+    return result;
   }
 
   public async setTimelineEntry(path: PanLPath, id: ITimePoint,
                                 duration: number) {
-    throw(new Error("TODO: Meothod not implemented"));
+    const key: string = Cache.hashTimelineKeyByTimePoint(path, id);
+    const shadowKey: string = Cache.shadowTimeLineEntryKey(key);
+
+    const timelineEntry = {
+      start: id.minutesOfDay,
+      end: id.minutesOfDay + duration,
+    };
+
+    const expiry = id.dayOffset === 0 ? Time.restDaySeconds() : this.expiry;
+    await Promise.all([
+      this.client.hmset(key, timelineEntry),
+      this.client.set(shadowKey, ""),
+      this.client.expire(shadowKey, expiry),
+    ]);
   }
 
   public async removeTimelineEntry(path: PanLPath, id: ITimePoint) {
-    throw(new Error("TODO: Meothod not implemented"));
+    const key: string = Cache.hashTimelineKeyByTimePoint(path, id);
+    await this.client.del(key);
   }
 
   public async setMeetingInfo(path: PanLPath, id: ITimePoint,
                               info: IMeetingInfo): Promise<void> {
-    throw(new Error("TODO: Meothod not implemented"));
+    const key: string = Cache.hashMeetingKeyByTimePoint(path, id);
+    await this.client.hmset(key, info);
   }
 
   public async removeMeetingInfo(path: PanLPath, id: ITimePoint):
   Promise<void> {
-    throw(new Error("TODO: Meothod not implemented"));
+    const key: string = Cache.hashMeetingKeyByTimePoint(path, id);
+    await this.client.del(key);
   }
 
   public async getMeetingInfo(path: PanLPath, id: ITimePoint):
   Promise<IMeetingInfo> {
-    throw(new Error("TODO: Meothod not implemented"));
+    const key = Cache.hashMeetingKeyByTimePoint(path, id);
+    const result: IMeetingInfo = await this.client.hgetall(key);
+    if (!result || Object.keys(result).length === 0) {
+      throw new Error("Meeting info not found");
+    }
+
+    return result;
+  }
+
+  public async getMeetingId(path: PanLPath, id: ITimePoint):
+  Promise<string> {
+    const key = Cache.hashMeetingIdKeyByTimePoint(path, id);
+    const result: string = await this.client.get(key);
+    if (!result) {
+      throw(new Error("Meeting Id not found"));
+    }
+
+    return result;
+  }
+
+  public async setMeetingId(path: PanLPath, id: ITimePoint, meetingId: string):
+  Promise<void> {
+    const key = Cache.hashMeetingIdKeyByTimePoint(path, id);
+    await this.client.set(key, meetingId);
+  }
+
+  public setExpiry(val: number): void {
+    this.expiry = val;
+  }
+
+  private scan(pattern: string): Promise<string[]> {
+    const self = this.client;
+    return new Promise((resolve) => {
+      const stream = self.scanStream({
+        // only returns keys following the pattern of `user:*`
+        match: pattern,
+        // returns approximately 100 elements per call2
+        count: 100,
+      });
+
+      const keys: string[] = [];
+      stream.on("data", (resultKeys) => {
+        // `resultKeys` is an array of strings representing key names
+        for (const val of resultKeys) {
+          keys.push(val);
+        }
+      });
+
+      stream.on("end", () => {
+        resolve(keys);
+      });
+    });
   }
 
   private async updateTimelineExpiryTime(path: PanLPath, dayOffset: number):
   Promise<void> {
-    // TODO: Meetings corresponding to a timeline shall be purged out
-    // once the timeline is expired.
-    throw(new Error("TODO: Meothod not implemented"));
+    // not today will update cache
+    if (dayOffset === 0) {
+      return;
+    }
+    const dayStr: string = Time.dayOffsetToString(dayOffset);
+    // Meetings corresponding to a timeline shall be purged out
+    const shadowKey: string[] = await this.scan(
+      `${Cache.SHADOW_TL_KEY}:${path.uid}:${dayStr}:*`);
+
+    const pipeline: redis.Pipeline = this.client.pipeline();
+    if (shadowKey && shadowKey.length) {
+      for (const key of shadowKey) {
+        pipeline.expire(key, this.expiry);
+      }
+    }
+
+    // execute all command
+    await pipeline.exec();
+  }
+
+  private setOnKeyExpired() {
+    this.observer.on("pmessage",  (pattern, channel, key) => {
+      log.debug("expired: ", key);
+      if (key && key.startsWith(Cache.SHADOW_TL_KEY)) {
+        const timelineEntryKey = key.replace(Cache.SHADOW_TL_KEY, "timeline");
+        const meetingInfoKey = key.replace(Cache.SHADOW_TL_KEY, "meeting");
+        const meetingId = key.replace(Cache.SHADOW_TL_KEY, "meeting_id");
+
+        this.client.del(timelineEntryKey);
+        this.client.del(meetingInfoKey);
+        this.client.del(meetingId);
+      }
+    });
   }
 
   private addRef(): void {

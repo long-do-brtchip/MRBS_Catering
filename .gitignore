@@ -56,7 +56,10 @@ jspm_packages/
 # dotenv environment variables file
 .env
 
+
+
 dist/
+.idea
 .idea/workspace.xml
 sqlitedb.db
 package-lock.json
