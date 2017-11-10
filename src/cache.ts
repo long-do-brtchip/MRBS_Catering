@@ -108,11 +108,16 @@ export class Cache {
   }
 
   public async getUnconfigured(idx: number):
-  Promise<[PanLPath | null, Buffer | null]> {
-    return Promise.all([
+  Promise<[PanLPath, Buffer] | undefined> {
+    const [path, buf] = await Promise.all([
       this.client.get(Cache.idToPathKey(idx)),
       this.client.getBuffer(Cache.idToUuidKey(idx)),
     ]);
+    if (path == null || buf == null) {
+      return undefined;
+    } else {
+      return [path, buf];
+    }
   }
 
   public async removeAgent(agent: number): Promise<void> {

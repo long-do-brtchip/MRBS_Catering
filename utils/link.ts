@@ -1,7 +1,7 @@
 import readline = require("readline");
 import {Cache} from "../src/cache";
-import {log} from "../src/log";
-import {IRoom, Persist} from "../src/persist";
+import {Persist} from "../src/persist";
+import {PanLService} from "../src/service";
 
 const rl = readline.createInterface({
   input: process.stdin,
@@ -10,25 +10,23 @@ const rl = readline.createInterface({
 
 rl.question("Room address:", (address) => {
   rl.question("Unconfigured ID:", async (id) => {
+    const service = await PanLService.getInstance();
     const persist = await Persist.getInstance();
     const cache = await Cache.getInstance();
-    const [path, uuid] = await cache.getUnconfigured(Number(id));
-    if (path !== null && uuid !== null) {
-      const room = await persist.findRoom(uuid);
-      if (room) {
-        await Promise.all([
-          persist.linkPanL(uuid, address),
-          cache.addConfigured(path, room),
-        ]);
+
+    const panl = await cache.getUnconfigured(Number(id));
+    if (panl !== undefined) {
+      const [path, uuid] = panl;
+      if (await persist.findRoomUuid(address)) {
+        persist.linkPanL(uuid, address);
+        service.emit("uuid", path, uuid);
         rl.write("Saved to database");
       } else {
         rl.write("Invalid room address");
       }
     } else {
-      rl.write("Invalid unconfigured ID");
+      rl.write("Invalid unconfigured PanL ID");
     }
-    persist.stop();
-    cache.stop();
     rl.close();
   });
 });

@@ -123,6 +123,11 @@ export class Persist {
       {address: link.address, name: link.name};
   }
 
+  public async findRoomUuid(address: string): Promise<string | undefined> {
+    const link = await Link.findOne({where: {address}}) as Link;
+    return link === undefined ? undefined : link.uuid;
+  }
+
   public async linkPanL(uuid: Buffer, email: string): Promise<void> {
     const link = await Link.findOne({where: {address: email}}) as Link;
     if (link === undefined) {
