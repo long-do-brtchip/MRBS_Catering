@@ -10,14 +10,18 @@ origin  git@github.com:ftdichipsg/MRBS.git (fetch)
 origin  git@github.com:ftdichipsg/MRBS.git (push)
 
 ```
-* Use `git pull` to update master branch everytime before you plan to create a new branch
-* Create a new branch from `master` by using command ```git checkout -b task_name master``` to start working on a new task or issue
+* Use `git checkout master && git pull` to update master branch everytime before you plan to create a new branch or send pull-request
+* Create a new branch from `master` by using command `git checkout -b task_name master` to start working on a new task or issue
 * Push the unfinished branch to your own account at least on a daily basis by using command `git push YOUR_GITHUB_USERNAME task_name`
 * After task is finished:
-  * `git rebase -i task_name` to cleanup commit history since all commits in here will be merged into master
-  * `git rebase master` and resolve conflicts
+  * Make sure all files are committed, or using `git stash` to stash for later usage
+  * `git checkout master && git pull && git rebase` to rebase to lastest master
+  * `git rebase -i master` to cleanup commit history
   * Push branch into your own account by using `git push YOUR_GITHUB_USERNAME task_name`
 * Send pull request by using command `hub pull-request`, or [manually create pull request](https://help.github.com/articles/creating-a-pull-request/) from github pages. Please remember mention the words like "fix #", detail explain of the keywords can be found at [here](https://help.github.com/articles/closing-issues-using-keywords/)
+* To work on multiple tasks at same time:
+  * Before switch to another branch name, commit all changes with message starts with "WIP: ". `git stash` also can be used if you will switch back in a short while
+  * Please push all branches back to github on a daily basis
 
 ## Environment setup
 * `node.js` version: v8.9.0 or later, LTS version
