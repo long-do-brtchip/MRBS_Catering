@@ -83,7 +83,7 @@ export class PanLSocketController implements IMessageTransport {
         log.info("Closing server...");
         server.close();
       });
-      log.info(`Server listen on port ${port}`);
+      log.info(`PanLController listen on port ${port}`);
     });
   }
 

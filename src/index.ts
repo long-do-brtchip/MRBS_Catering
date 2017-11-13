@@ -1,4 +1,8 @@
+import {HttpServer} from "./httpserver";
 import {log} from "./log";
 import {PanLService} from "./service";
 
-PanLService.getInstance();
+(async () => {
+  await PanLService.getInstance();
+  await HttpServer.getInstance();
+})();
