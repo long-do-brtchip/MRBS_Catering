@@ -15,7 +15,7 @@ origin  git@github.com:ftdichipsg/MRBS.git (push)
 * Push the unfinished branch to your own account at least on a daily basis by using command `git push YOUR_GITHUB_USERNAME task_name`
 * After task is finished:
   * Make sure all files are committed, or using `git stash` to stash for later usage
-  * `git checkout master && git pull && git rebase` to rebase to lastest master
+  * `git checkout master && git pull && git checkout task_name && git rebase master` to rebase to lastest master
   * `git rebase -i master` to cleanup commit history
   * Push branch into your own account by using `git push YOUR_GITHUB_USERNAME task_name`
 * Send pull request by using command `hub pull-request`, or [manually create pull request](https://help.github.com/articles/creating-a-pull-request/) from github pages. Please remember mention the words like "fix #", detail explain of the keywords can be found at [here](https://help.github.com/articles/closing-issues-using-keywords/)
