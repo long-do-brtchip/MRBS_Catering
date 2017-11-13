@@ -4,6 +4,7 @@ import {Connection, createConnection} from "typeorm";
 import {Agent} from "./entity/agent";
 import {Config, ConfigType} from "./entity/config";
 import {Link} from "./entity/link";
+import {log} from "./log";
 
 export enum CalenderType {
   UNCONFIGURED,
@@ -44,17 +45,22 @@ export class Persist {
   public static async getInstance(): Promise<Persist> {
     if (Persist.instance === undefined) {
       Persist.instance = new Persist(await createConnection());
+    } else {
+      Persist.instance.addRef();
     }
     return Persist.instance;
   }
 
   private static instance: Persist | undefined;
 
-  private constructor(private conn: Connection) { }
+  private constructor(private conn: Connection, private refCnt = 1) { }
 
   public async stop(): Promise<void> {
-    await this.conn.close();
-    Persist.instance = undefined;
+    if (--this.refCnt === 0) {
+      log.silly("Close database connection");
+      await this.conn.close();
+      Persist.instance = undefined;
+    }
   }
 
   public async getAgentId(buf: Buffer): Promise<number> {
@@ -143,5 +149,9 @@ export class Persist {
     if (link !== undefined) {
       await link.remove();
     }
+  }
+
+  private addRef(): void {
+    this.refCnt++;
   }
 }

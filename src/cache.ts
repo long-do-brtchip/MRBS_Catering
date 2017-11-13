@@ -11,6 +11,7 @@ declare type PendingHandler = (path: PanLPath) => void;
 export class Cache {
   public static async getInstance(): Promise<Cache> {
     if (Cache.instance !== undefined) {
+      Cache.instance.addRef();
       return Cache.instance;
     }
     return new Promise<Cache>((resolve, reject) => {
@@ -55,12 +56,15 @@ export class Cache {
     return `agent:${agent}`;
   }
 
-  private constructor(private client: redis.Redis) {
+  private constructor(private client: redis.Redis, private refCnt = 1) {
   }
 
   public async stop(): Promise<void> {
-    await this.client.quit();
-    Cache.instance = undefined;
+    if (--this.refCnt === 0) {
+      log.silly("Close redis connection");
+      await this.client.quit();
+      Cache.instance = undefined;
+    }
   }
 
   public async addPending(path: PanLPath): Promise<void> {
@@ -203,5 +207,9 @@ export class Cache {
     // TODO: Meetings corresponding to a timeline shall be purged out
     // once the timeline is expired.
     throw(new Error("TODO: Meothod not implemented"));
+  }
+
+  private addRef(): void {
+    this.refCnt++;
   }
 }

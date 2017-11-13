@@ -15,6 +15,8 @@ export class PanLService extends EventEmitter {
       PanLService.persist = await Persist.getInstance();
       PanLService.cache = await Cache.getInstance();
       PanLService.instance = new PanLService();
+    } else {
+      PanLService.instance.addRef();
     }
     return PanLService.instance;
   }
@@ -31,7 +33,7 @@ export class PanLService extends EventEmitter {
   private tx: Transmit;
   private cal: CalenderManager;
 
-  private constructor() {
+  private constructor(private refCnt = 1) {
     super();
     this.on("calMgrReady", this.onCalMgrReady);
     this.on("calMgrError", this.onCalMgrError);
@@ -66,12 +68,14 @@ export class PanLService extends EventEmitter {
   }
 
   public async stop(): Promise<void> {
-    this.tx.stop();
-    await this.cal.disconnect();
-    this.removeAllListeners();
-    await PanLService.persist.stop();
-    await PanLService.cache.stop();
-    PanLService.instance = undefined;
+    if (--this.refCnt === 0) {
+      this.tx.stop();
+      await this.cal.disconnect();
+      this.removeAllListeners();
+      await PanLService.persist.stop();
+      await PanLService.cache.stop();
+      PanLService.instance = undefined;
+    }
   }
 
   private onCalMgrReady(): void {
@@ -304,5 +308,9 @@ export class PanLService extends EventEmitter {
     } catch (err) {
       log.warn(`Show Unconfigured ID failed for ${path}: ${err}`);
     }
+  }
+
+  private addRef(): void {
+    this.refCnt++;
   }
 }
