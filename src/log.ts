@@ -15,10 +15,11 @@ switch (process.env.NODE_ENV) {
     });
     break;
   default:
+    const ts = () => (new Date()).toLocaleTimeString();
     log = new Logger({
       level: "silly",
       transports: [
-        new transports.Console({colorize: true}),
+        new transports.Console({colorize: true, timestamp: ts}),
       ],
     });
 }
