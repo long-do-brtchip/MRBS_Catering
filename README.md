@@ -50,6 +50,14 @@ origin  git@github.com:ftdichipsg/MRBS.git (push)
 * Prefer for..of over for..in
 * Use undefined. Do not use null
 
+## Log level guidelines
+* error: issues must be addressed by admin
+* warn: system is not running in expected environment, but admin can ignore the message
+* info: system running state report, and system log / audit information
+* verbose: used by customer support to debug issues
+* debug: used by developer to debug issues
+* silly: information even developer doesn't care most of the time
+
 ## Automated script to install hub command on Linux
 ```bash
 #!/bin/bash
