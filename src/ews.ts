@@ -21,7 +21,7 @@ export class EWSCalendar implements ICalendar {
   constructor(private notify: ICalendarNotification,
               private cache: Cache, config: ICalendarConfig,
               private configHub: IHubConfig) {
-    EwsLogging.DebugLogEnabled = true;
+    EwsLogging.DebugLogEnabled = false;
     // TODO: auto detect exchange server version
 
     this.service = new ExchangeService(ExchangeVersion.Exchange2010);
@@ -34,9 +34,10 @@ export class EWSCalendar implements ICalendar {
   Promise<boolean> {
     const result: ITimelineEntry[] = [];
     // Cannot find timeline from cache, get from server
-    const view = new CalendarView(
-      DateTime.Now.Add(dayOffset - 1, "day"),
-      DateTime.Now.Add(dayOffset, "day"));
+
+    const from = DateTime.Now.Date.AddDays(dayOffset); // midnight of dayOffset
+    const to = from.AddDays(1);
+    const view = new CalendarView(from, to);
 
     await this.impersonationSupport(path);
 
@@ -77,6 +78,7 @@ export class EWSCalendar implements ICalendar {
     // Create the appointment.
     const appointment = new Appointment(this.service);
     const roomName = await this.cache.getRoomName(path);
+    const roomAdress = await this.cache.getRoomAddress(path);
     const msStart = Time.getMiliseconds(id.dayOffset, id.minutesOfDay);
 
     // Set properties on the appointment.
@@ -84,6 +86,8 @@ export class EWSCalendar implements ICalendar {
     appointment.Start = new DateTime(msStart);
     appointment.End = new DateTime(Time.extendTime(msStart, duration));
     appointment.Location = roomName;
+    // cancel meeting required
+    appointment.RequiredAttendees.Add(roomAdress);
 
     // Save the meeting to the Calendar folder and send the meeting request.
     await appointment.Save(SendInvitationsMode.SendToNone);
@@ -99,22 +103,25 @@ export class EWSCalendar implements ICalendar {
 
     const meetingId = await this.cache.getMeetingId(path, id);
     const appointmentId = new ItemId(meetingId);
+    try {
+      // Instantiate an meeting object by binding to it by using the ItemId.
+      const appointment = await Appointment.Bind(this.service, appointmentId);
 
-    // Instantiate an meeting object by binding to it by using the ItemId.
-    const appointment = await Appointment.Bind(this.service, appointmentId);
+      const originMs = appointment.End.TotalMilliSeconds;
+      appointment.End = new DateTime(Time.extendTime(originMs, duration));
 
-    const originMs = appointment.End.TotalMilliSeconds;
-    appointment.End = new DateTime(Time.extendTime(originMs, duration));
+      // Unless explicitly specified, the default is to use SendToAllAndSave..
+      // This can convert an appointment into a meeting. To avoid this,
+      // explicitly set SendToNone on non-meetings.
+      const mode = appointment.IsMeeting ?
+        SendInvitationsOrCancellationsMode.SendToAllAndSaveCopy
+        : SendInvitationsOrCancellationsMode.SendToNone;
 
-    // Unless explicitly specified, the default is to use SendToAllAndSave..
-    // This can convert an appointment into a meeting. To avoid this,
-    // explicitly set SendToNone on non-meetings.
-    const mode = appointment.IsMeeting ?
-      SendInvitationsOrCancellationsMode.SendToAllAndSaveCopy
-      : SendInvitationsOrCancellationsMode.SendToNone;
-
-    // Send the update request to the Exchange server.
-    await appointment.Update(ConflictResolutionMode.AlwaysOverwrite, mode);
+      // Send the update request to the Exchange server.
+      await appointment.Update(ConflictResolutionMode.AlwaysOverwrite, mode);
+    } catch (error) {
+      throw new Error(error.message);
+    }
   }
 
   public async endMeeting(path: PanLPath, id: ITimePoint): Promise<void> {
@@ -123,20 +130,24 @@ export class EWSCalendar implements ICalendar {
     const meetingId = await this.cache.getMeetingId(path, id);
     const appointmentId = new ItemId(meetingId);
 
-    // Instantiate an meeting object by binding to it by using the ItemId.
-    const appointment = await Appointment.Bind(this.service, appointmentId);
+    try {
+      // Instantiate an meeting object by binding to it by using the ItemId.
+      const appointment = await Appointment.Bind(this.service, appointmentId);
 
-    appointment.End = DateTime.Now;
+      appointment.End = DateTime.Now;
 
-    // Unless explicitly specified, the default is to use SendToAllAndSave..
-    // This can convert an appointment into a meeting. To avoid this,
-    // explicitly set SendToNone on non-meetings.
-    const mode = appointment.IsMeeting ?
-      SendInvitationsOrCancellationsMode.SendToAllAndSaveCopy
-      : SendInvitationsOrCancellationsMode.SendToNone;
+      // Unless explicitly specified, the default is to use SendToAllAndSave..
+      // This can convert an appointment into a meeting. To avoid this,
+      // explicitly set SendToNone on non-meetings.
+      const mode = appointment.IsMeeting ?
+        SendInvitationsOrCancellationsMode.SendToAllAndSaveCopy
+        : SendInvitationsOrCancellationsMode.SendToNone;
 
-    // Send the update request to the Exchange server.
-    await appointment.Update(ConflictResolutionMode.AlwaysOverwrite, mode);
+      // Send the update request to the Exchange server.
+      await appointment.Update(ConflictResolutionMode.AlwaysOverwrite, mode);
+    } catch (error) {
+      throw new Error(error.message);
+    }
   }
 
   public async cancelMeeting(path: PanLPath, id: ITimePoint): Promise<void> {
@@ -145,12 +156,15 @@ export class EWSCalendar implements ICalendar {
     const meetingId = await this.cache.getMeetingId(path, id);
     const appointmentId = new ItemId(meetingId);
 
-    // Instantiate an appointment object by binding to it using the ItemId.
-    const meeting = await Appointment.Bind(this.service, appointmentId,
-      new PropertySet());
+    try {
+      // Instantiate an appointment object by binding to it using the ItemId.
+      const meeting = await Appointment.Bind(this.service, appointmentId);
 
-    // Delete the meeting by using the CancelMeeting method.
-    await meeting.CancelMeeting("The meeting has been cancelled");
+      // Delete the meeting by using the CancelMeeting method.
+      await meeting.CancelMeeting();
+    } catch (error) {
+      throw new Error(error.message);
+    }
   }
 
   public async cancelUnclaimedMeeting(path: PanLPath, id: ITimePoint):
