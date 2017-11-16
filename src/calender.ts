@@ -28,7 +28,7 @@ export interface ITimelineRequest {
 }
 
 export interface ICalender {
-  getTimeline(path: PanLPath, req: ITimelineRequest): Promise<ITimelineEntry[]>;
+  getTimeline(path: PanLPath, dayOffset: number): Promise<boolean>;
   createBooking(path: PanLPath, id: ITimePoint, duration: number):
     Promise<void>;
   extendMeeting(path: PanLPath, id: ITimePoint, duration: number):
@@ -68,9 +68,12 @@ export class CalenderManager implements ICalenderNotification {
     this.cache.setDayOffset(path, req.id.dayOffset);
     let entries = await this.cache.getTimeline(path, req);
     if (entries === undefined) {
-      entries = await this.calender.getTimeline(path, req);
-      this.cache.setTimeline(path, req.id.dayOffset, entries);
+      // get timeline from External server and cached
+      const isHave = await this.calender.getTimeline(path, req.id.dayOffset);
+      // get in cache again
+      entries = isHave ? (await this.cache.getTimeline(path, req) || []) : [];
     }
+
     return entries;
   }
 
@@ -130,6 +133,7 @@ export class CalenderManager implements ICalenderNotification {
 
     try {
       const config = await this.persist.getCalenderConfig();
+      const configHub = await this.persist.getHubConfig();
 
       switch (config.type) {
         case CalenderType.UNCONFIGURED:
@@ -137,7 +141,7 @@ export class CalenderManager implements ICalenderNotification {
           return;
         case CalenderType.EXCHANGE:
         case CalenderType.OFFICE365:
-          this.calender = new EWSCalender(this, this.cache, config);
+          this.calender = new EWSCalender(this, this.cache, config, configHub);
           break;
         case CalenderType.GOOGLE:
           throw new Error("Method not implemented.");

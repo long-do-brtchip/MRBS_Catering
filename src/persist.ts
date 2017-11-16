@@ -31,6 +31,7 @@ export interface IHubConfig {
   localAuthDB: boolean;
   remoteAuthDB: string;
   expiry: number;
+  meetingSubject: string;
 }
 
 export interface IPanLConfig {
@@ -162,6 +163,7 @@ export class Persist {
         localAuthDB: true,
         remoteAuthDB: "abc...",
         expiry: 180,
+        meetingSubject: "Meeting create by PanL70",
       };
     } else {
       return JSON.parse(v.val);

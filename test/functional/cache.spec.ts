@@ -97,7 +97,7 @@ describe("Cache module", () => {
     });
   });
   describe("TimeLine", () => {
-    it("undefined is returned for a day without cache", async () => {
+    it("Should return undefined when day without cache", async () => {
       await cache.flush();
       const point = {dayOffset: 0, minutesOfDay: 0};
       const req = {
@@ -107,7 +107,7 @@ describe("Cache module", () => {
       };
       expect(await cache.getTimeline(path1, req)).to.deep.equal(undefined);
     });
-    it("zero length array is returned for a day been cached but no meeting",
+    it("Should return empty array when search range has no meeting",
       async () => {
       await cache.flush();
       const point = {dayOffset: 0, minutesOfDay: 0};
@@ -121,11 +121,11 @@ describe("Cache module", () => {
       await cache.setTimeline(path1, 0, timeline);
       expect(await cache.getTimeline(path1, req)).to.deep.equal([]);
     });
-    it(`The returned timeline returns correct number of entries after
-    setTimelineEntry insert a new entry, and sorted by startTime`, async () => {
+    it("Should return timeline sorted by startTime and exactly saved before",
+      async () => {
       await cache.flush();
       const point = {dayOffset: 0, minutesOfDay: 400};
-      const point1 = {dayOffset: 0, minutesOfDay: 450};
+      const point1 = {dayOffset: 0, minutesOfDay: 1030};
       const point2 = {dayOffset: 0, minutesOfDay: 720};
       const point3 = {dayOffset: 0, minutesOfDay: 590};
 
@@ -137,9 +137,9 @@ describe("Cache module", () => {
 
       // 8h, 12h, 9h50
       const expectResult = [
-        {start: 450, end: 480},
         {start: 590, end: 620},
-        {start: 720, end: 740}];
+        {start: 720, end: 740},
+        {start: 1030, end: 1060}];
 
       await Promise.all([
         cache.setTimelineEntry(path2, point3, 30),
@@ -149,8 +149,8 @@ describe("Cache module", () => {
 
       expect(await cache.getTimeline(path2, req)).to.deep.equal(expectResult);
     });
-    it("The returned timeline returns correct number of entries after" +
-    "setTimelineEntry modify an entry, and sorted by startTime", async () => {
+    it("Should return timeline sorted by startTime and exactly after modified",
+      async () => {
       await cache.flush();
       const point = {dayOffset: 0, minutesOfDay: 400};
       const point1 = {dayOffset: 0, minutesOfDay: 450};
@@ -178,8 +178,7 @@ describe("Cache module", () => {
 
       expect(await cache.getTimeline(path2, req)).to.deep.equal(expectResult);
     });
-    it("The returned timeline returns correct number of entries after" +
-     "removeTimelineEntry delete an entry, and sorted by startTime",
+    it("Should return timeline sorted by startTime and exactly after removed",
       async () => {
       await cache.flush();
       const point = {dayOffset: 0, minutesOfDay: 130};
@@ -212,8 +211,9 @@ describe("Cache module", () => {
       await cache.removeTimelineEntry(path2, point1);
       expect(await cache.getTimeline(path2, req)).to.deep.equal(expectResult);
     });
-    it("Request with a timepoint at which doesn't have any meeting can return" +
-      "all the meetings before the timepoint", async () => {
+    it("Should return a part of timeline before timepoint when " +
+      "look backwards and timepoint do not matching any startTime",
+      async () => {
       await cache.flush();
       const point = {dayOffset: 0, minutesOfDay: 800};
       const point1 = {dayOffset: 0, minutesOfDay: 450};
@@ -244,8 +244,8 @@ describe("Cache module", () => {
 
       expect(await cache.getTimeline(path2, req)).to.deep.equal(expectResult);
     });
-    it(`Request with a timepoint at which doesn't have any meeting can return
-      all the meetings after the timepoint`, async () => {
+    it("Should return a part of timeline after timepoint when " +
+      "look forwards and timepoint do not matching any startTime", async () => {
       await cache.flush();
       const point = {dayOffset: 0, minutesOfDay: 700};
       const point1 = {dayOffset: 0, minutesOfDay: 450};
@@ -338,6 +338,38 @@ describe("Cache module", () => {
 
       expect(await cache.getTimeline(path2, req)).to.deep.equal(expectResult);
     });
+    it("Should return fixed timline size by maxCount",
+      async () => {
+        await cache.flush();
+        const point = {dayOffset: 0, minutesOfDay: 740};
+        const point1 = {dayOffset: 0, minutesOfDay: 450};
+        const point2 = {dayOffset: 0, minutesOfDay: 720};
+        const point3 = {dayOffset: 0, minutesOfDay: 590};
+        const point4 = {dayOffset: 0, minutesOfDay: 900};
+
+        const req = {
+          id: point,
+          lookForward: false, // searching before point
+          maxCount: 1,
+        };
+
+        const expectResult = [
+          // {start: 450, end: 480},
+          // {start: 590, end: 670},
+          {start: 720, end: 750},
+          // {start: 900, end: 980},
+        ];
+
+        await Promise.all([
+          cache.setTimelineEntry(path2, point1, 30),
+          cache.setTimelineEntry(path2, point2, 30),
+          cache.setTimelineEntry(path2, point3, 80),
+          cache.setTimelineEntry(path2, point4, 80),
+        ]);
+
+        expect(await cache.getTimeline(path2, req)).to.deep.equal(expectResult);
+      });
+
     it("should return undefined after timeline expired",
       async function expiryTest() {
       this.slow(5000);

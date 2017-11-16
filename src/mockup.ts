@@ -10,16 +10,16 @@ export class MockupCalender implements ICalender {
               private cache: Cache) {
   }
 
-  public async getTimeline(path: PanLPath, req: ITimelineRequest)
-  : Promise<ITimelineEntry[]> {
+  public async getTimeline(path: PanLPath, dayOffset: number)
+  : Promise<boolean> {
     const entries: ITimelineEntry[] = [{start: 60 * 8, end: 60 * 9}];
     this.cache.setMeetingInfo(path,
-      {dayOffset: req.id.dayOffset, minutesOfDay: 60 * 8},
-      {subject: `Test ${req.id.dayOffset}-1`, organizer: "Tester"});
+      {dayOffset, minutesOfDay: 60 * 8},
+      {subject: `Test ${dayOffset}-1`, organizer: "Tester"});
     this.cache.setMeetingInfo(path,
-      {dayOffset: req.id.dayOffset, minutesOfDay: 60 * 8},
-      {subject: `Test ${req.id.dayOffset}-2`, organizer: "Tester"});
-    return entries;
+      {dayOffset, minutesOfDay: 60 * 8},
+      {subject: `Test ${dayOffset}-2`, organizer: "Tester"});
+    return true;
   }
 
   public async createBooking(path: PanLPath, id: ITimePoint, duration: number):

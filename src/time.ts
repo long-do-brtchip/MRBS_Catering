@@ -1,5 +1,5 @@
 import * as moment from "moment";
-import {ITimelineRequest} from "./calender";
+import {ITimelineEntry, ITimelineRequest} from "./calender";
 
 export interface IHourMinute {
   hour: number;
@@ -30,7 +30,7 @@ export class Time {
   public static getMiliseconds(dayOffset: number, minuteOfDay: number): number {
     const {hour, minute} = this.convertToHourMinute(minuteOfDay);
 
-    const day: moment.Moment = moment.utc()
+    const day: moment.Moment = moment()
       .set({
         hour,
         minute,
@@ -43,27 +43,7 @@ export class Time {
   }
 
   public static extendTime(ms: number, duration: number): number {
-    /* firstly get hour and minute of day,
-     * then plus to duration and convert to hour minute again
-     */
-
-    //  init date as ms
-    const tmpDay = moment.utc(ms);
-    const hourOfDay: number = tmpDay.hour();
-    const minuteOfDay: number = tmpDay.minute();
-
-    const {hour, minute} = this.convertToHourMinute(
-      duration + (hourOfDay * 60) + minuteOfDay);
-
-    const day: moment.Moment = moment.utc(ms)
-      .add(hour, "hour")
-      .set({
-        minute,
-        second: 0,
-        millisecond: 0,
-      });
-
-    return day.valueOf();
+    return ms + duration * 60000; // 60s * 1000 ms
   }
 
   public static convertToHourMinute(duration: number): IHourMinute {
@@ -75,11 +55,18 @@ export class Time {
 
   public static filterTimeLineKeys(src: string[], req: ITimelineRequest):
   string[] {
+    function customSort(key1: string, key2: string) {
+      const start1 = parseInt(key1.split(":")[3], 10);
+      const start2 = parseInt(key2.split(":")[3], 10);
+      return (start1 !== start2) ? (start1 < start2 ? -1 : 1) : 0;
+    }
+
     let result: string[] = [];
     // find at point to before, else is reverser
     if (!req.lookForward) {
       result = src.filter((key) =>
-      parseInt(key.split(":")[3], 10) <= req.id.minutesOfDay);
+        parseInt(key.split(":")[3], 10) <= req.id.minutesOfDay)
+        .sort(customSort);
 
       const len: number = result.length;
       if (len && len > req.maxCount) {
@@ -89,10 +76,11 @@ export class Time {
     } else {
       result = src.filter((key) =>
       parseInt(key.split(":")[3], 10) > req.id.minutesOfDay)
+          .sort(customSort)
           .slice(0, req.maxCount);
     }
 
-    return result.sort();
+    return result;
   }
 
 }
