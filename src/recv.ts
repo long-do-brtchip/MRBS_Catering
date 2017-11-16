@@ -89,10 +89,10 @@ export class MessageParser {
   }
 
   public onData(buffer: Buffer): void {
-    let next = MessageParser.verifyLength(buffer, 1);
-
-    do {
+    while (buffer.byteLength) {
       const id = buffer[0];
+      let next = buffer = buffer.slice(1);
+      log.silly(`Received id ${id} length: ${buffer.length}`);
 
       switch (id) {
         case Incoming.REQUEST_FIRMWARE:
@@ -110,7 +110,7 @@ export class MessageParser {
           break;
         case Incoming.REPORT_UUID:
           next = MessageParser.verifyLength(buffer, 8);
-          this.notify("uuid", next);
+          this.notify("uuid", buffer);
           break;
         case Incoming.REPORT_DEVICE_CHANGE:
           this.notify("deviceChange");
@@ -180,6 +180,6 @@ export class MessageParser {
           throw new Error("Unknown Incoming ID.");
       }
       buffer = next;
-    } while (buffer.length);
+    }
   }
 }

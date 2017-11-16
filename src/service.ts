@@ -2,7 +2,7 @@ import {EventEmitter} from "events";
 import {MessageBuilder} from "./builder";
 import {Cache} from "./cache";
 import {
-  CalenderManager, ITimelineEntry, ITimelineRequest, ITimePoint,
+  CalenderManager, IMeetingInfo, ITimelineEntry, ITimelineRequest, ITimePoint,
 } from "./calender";
 import {log} from "./log";
 import {PanLPath} from "./path";
@@ -276,24 +276,44 @@ export class PanLService extends EventEmitter {
 
   private async initPanel(path: PanLPath): Promise<void> {
     const now = PanLService.getMinutesPassed();
-    const req: ITimelineRequest = {
+    const reqBefore: ITimelineRequest = {
+      id: {dayOffset: 0, minutesOfDay: now},
+      lookForward: false,
+      maxCount: 1,
+    };
+    const reqAfter: ITimelineRequest = {
       id: {dayOffset: 0, minutesOfDay: now},
       lookForward: true,
-      maxCount: 8,
+      maxCount: 5,
     };
 
     try {
-      const [name, entries, info] = await Promise.all([
+      let info : IMeetingInfo | undefined;
+      const [name, entriesBefore, entriesAfter] = await Promise.all([
         PanLService.cache.getRoomName(path),
-        this.cal.getTimeline(path, req),
-        this.cal.getMeetingInfo(path, now),
+        this.cal.getTimeline(path, reqBefore),
+        this.cal.getTimeline(path, reqAfter),
       ]);
+      const entries = entriesBefore.concat(entriesAfter);
+      for (const entry of entries) {
+        if (now >= entry.start && now < entry.end) {
+          info = await this.cal.getMeetingInfo(path, entriesBefore[0].start);
+        }
+      }
+
       log.debug(`Request ${path} set room name to ${name}`);
-      this.tx.send(path, [
-        ...MessageBuilder.buildRoomName(name),
-        MessageBuilder.buildTimeline(entries, req.id.dayOffset),
-        ...MessageBuilder.buildMeetingInfo(info),
-      ] as Buffer[]);
+      if (info) {
+        this.tx.send(path, [
+          ...MessageBuilder.buildRoomName(name),
+          ...MessageBuilder.buildTimeline(entries, 0),
+          ...MessageBuilder.buildMeetingInfo(info),
+        ]);
+      } else {
+        this.tx.send(path, [
+          ...MessageBuilder.buildRoomName(name),
+          ...MessageBuilder.buildTimeline(entries, 0),
+        ]);
+      }
     } catch (err) {
       log.warn(`Init panel failed for ${path}: ${err}`);
     }

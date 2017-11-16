@@ -21,11 +21,11 @@ export class PanLSocketController implements IMessageTransport {
       socket.on("data", (data) => {
           if (s.parser) {
             try {
-              log.silly(`Received data from agent ${s.parser.path.agent}: ` +
-                data);
+              log.silly(`Received ${data.byteLength} bytes from agent ` +
+                s.parser.path.agent);
               s.parser.onData(data);
             } catch (e) {
-              log.debug(`Received malformatted data ${data}, close socket.`);
+              log.debug(`Failed to parse: ${e}, close socket.`);
               socket.end();
             }
           } else {

@@ -71,7 +71,7 @@ api.route("/room/:address").all(async (req, res, next) => {
   res.sendStatus(204);
 });
 
-api.route("panl/:id/:address").get(async (req, res) => {
+api.route("/panl/:id/:address").get(async (req, res) => {
   if (req.params.address === undefined || req.params.id === undefined) {
     return res.sendStatus(400);
   }
@@ -81,7 +81,7 @@ api.route("panl/:id/:address").get(async (req, res) => {
   if (panl !== undefined) {
     const [path, uuid] = panl;
     const persist = await Persist.getInstance();
-    if (await persist.findRoomUuid(req.params.address)) {
+    if (undefined !== await persist.findRoomUuid(req.params.address)) {
       persist.linkPanL(uuid, req.params.address);
       const service = await PanLService.getInstance();
       service.emit("uuid", path, uuid);
