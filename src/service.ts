@@ -288,30 +288,39 @@ export class PanLService extends EventEmitter {
     };
 
     try {
-      let info : IMeetingInfo | undefined;
       const [name, entriesBefore, entriesAfter] = await Promise.all([
         PanLService.cache.getRoomName(path),
         this.cal.getTimeline(path, reqBefore),
         this.cal.getTimeline(path, reqAfter),
       ]);
-      const entries = entriesBefore.concat(entriesAfter);
-      for (const entry of entries) {
-        if (now >= entry.start && now < entry.end) {
-          info = await this.cal.getMeetingInfo(path, entriesBefore[0].start);
-        }
-      }
-
+      const ignoreBefore = entriesBefore.length === 0 ||
+        now >= entriesBefore[0].end;
+      const entries = ignoreBefore
+        ? entriesAfter : entriesBefore.concat(entriesAfter);
       log.debug(`Request ${path} set room name to ${name}`);
-      if (info) {
+      if (entries.length === 0) {
         this.tx.send(path, [
           ...MessageBuilder.buildRoomName(name),
           ...MessageBuilder.buildTimeline(entries, 0),
-          ...MessageBuilder.buildMeetingInfo(info),
+        ]);
+      } else if (entries.length === 1) {
+        this.tx.send(path, [
+          ...MessageBuilder.buildRoomName(name),
+          ...MessageBuilder.buildTimeline(entries, 0),
+          ...MessageBuilder.buildMeetingInfo(
+            await this.cal.getMeetingInfo(path, entries[0].start)),
         ]);
       } else {
+        // Send next meeting info too
+        const info = await Promise.all([
+            this.cal.getMeetingInfo(path, entries[0].start),
+            this.cal.getMeetingInfo(path, entries[1].start),
+        ]);
         this.tx.send(path, [
           ...MessageBuilder.buildRoomName(name),
           ...MessageBuilder.buildTimeline(entries, 0),
+          ...MessageBuilder.buildMeetingInfo(info[0]),
+          ...MessageBuilder.buildMeetingInfo(info[1]),
         ]);
       }
     } catch (err) {
