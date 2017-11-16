@@ -293,7 +293,7 @@ describe("Cache module", () => {
 
       const expectResult = [
         // {start: 450, end: 480},
-        // {start: 590, end: 670},
+        {start: 590, end: 670},
         {start: 720, end: 750},
         {start: 900, end: 980},
         ];
@@ -325,7 +325,7 @@ describe("Cache module", () => {
       const expectResult = [
         {start: 450, end: 480},
         {start: 590, end: 670},
-        {start: 720, end: 750},
+        // {start: 720, end: 750},
         // {start: 900, end: 980},
       ];
 

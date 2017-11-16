@@ -65,7 +65,7 @@ export class Time {
     // find at point to before, else is reverser
     if (!req.lookForward) {
       result = src.filter((key) =>
-        parseInt(key.split(":")[3], 10) <= req.id.minutesOfDay)
+        parseInt(key.split(":")[3], 10) < req.id.minutesOfDay)
         .sort(customSort);
 
       const len: number = result.length;
@@ -75,7 +75,7 @@ export class Time {
       }
     } else {
       result = src.filter((key) =>
-      parseInt(key.split(":")[3], 10) > req.id.minutesOfDay)
+      parseInt(key.split(":")[3], 10) >= req.id.minutesOfDay)
           .sort(customSort)
           .slice(0, req.maxCount);
     }
