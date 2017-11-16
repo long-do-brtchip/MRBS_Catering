@@ -154,7 +154,10 @@ export class PanLService extends EventEmitter {
   private async onGetTimeline(
     path: PanLPath, req: ITimelineRequest): Promise<void> {
     try {
-      log.debug(`Send timeline to ${path}`);
+      const date = `{req.id.dayOffset}${req.lookForward ? "+" : "-"}`;
+      const time = `${req.id.minutesOfDay / 60}:${req.id.minutesOfDay % 60}`;
+      log.debug(`Path ${path} request up to ${req.maxCount} ` +
+        `busy slots ${date} ${time}`);
       this.tx.send(path, MessageBuilder.buildTimeline(
         await this.cal.getTimeline(path, req), req.id.dayOffset));
     } catch (err) {
@@ -297,7 +300,8 @@ export class PanLService extends EventEmitter {
         now >= entriesBefore[0].end;
       const entries = ignoreBefore
         ? entriesAfter : entriesBefore.concat(entriesAfter);
-      log.debug(`Request ${path} set room name to ${name}`);
+      log.debug(`Request ${path} set room name to ${name}, busy slot: ` +
+        entries.length);
       if (entries.length === 0) {
         this.tx.send(path, [
           ...MessageBuilder.buildRoomName(name),

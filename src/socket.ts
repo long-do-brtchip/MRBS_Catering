@@ -22,7 +22,7 @@ export class PanLSocketController implements IMessageTransport {
           if (s.parser) {
             try {
               log.silly(`Received ${data.byteLength} bytes from agent ` +
-                s.parser.path.agent);
+                `${s.parser.path.agent}: ${data.toString("hex")}`);
               s.parser.onData(data);
             } catch (e) {
               log.debug(`Failed to parse: ${e}, close socket.`);
@@ -31,7 +31,7 @@ export class PanLSocketController implements IMessageTransport {
           } else {
             MessageParser.parseAgentID(data).then((buf) => {
               this.persist.getAgentId(buf).then((id) => {
-                log.info(`Agent ${buf} is using id: ${id}`);
+                log.info(`Agent ${buf.toString("hex")} is using id: ${id}`);
                 this.sockets.set(id, socket);
                 s.parser = new MessageParser(this.event, id);
               });
@@ -115,7 +115,8 @@ export class PanLSocketController implements IMessageTransport {
     }
     socket.write(hdr);
     for (const payload of payloads) {
-        socket.write(payload);
+      log.silly(`Write ${payload.toString("hex")}`);
+      socket.write(payload);
     }
   }
 }

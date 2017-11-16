@@ -92,7 +92,6 @@ export class MessageParser {
     while (buffer.byteLength) {
       const id = buffer[0];
       let next = buffer = buffer.slice(1);
-      log.silly(`Received id ${id} length: ${buffer.length}`);
 
       switch (id) {
         case Incoming.REQUEST_FIRMWARE:

@@ -122,7 +122,7 @@ const StructSetLocalTime = StructType({
 
 const StructUnconfiguredID = StructType({
   cmd : ref.types.uint8,
-  count : ref.types.uint16,
+  id: ref.types.uint16,
 }, {packed: true});
 
 const StructSetTimelineHdr = StructType({
