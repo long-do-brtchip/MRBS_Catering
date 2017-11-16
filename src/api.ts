@@ -87,11 +87,11 @@ api.route("/panl/:id/:address").get(async (req, res) => {
       service.emit("uuid", path, uuid);
       service.stop();
     } else {
-      return res.status(410).send("Invalid room address");
+      return res.status(410).send(`Invalid room address ${req.params.address}`);
     }
     persist.stop();
   } else {
-    return res.status(410).send("Invalid id");
+    return res.status(410).send(`Invalid id ${req.params.id}`);
   }
   res.sendStatus(204);
 });

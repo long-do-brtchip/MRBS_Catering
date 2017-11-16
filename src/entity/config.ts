@@ -1,7 +1,7 @@
 import {BaseEntity, Column, Entity, PrimaryColumn} from "typeorm";
 
 export enum ConfigType {
-  CALENDER_CONFIG,
+  CALENDAR_CONFIG,
   HUB_CONFIG,
   PANL_CONFIG,
 }

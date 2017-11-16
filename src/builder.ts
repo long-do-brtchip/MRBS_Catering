@@ -1,6 +1,6 @@
 import ref = require("ref");
 import StructType = require("ref-struct");
-import {IMeetingInfo, ITimelineEntry, ITimePoint} from "./calender";
+import {IMeetingInfo, ITimelineEntry, ITimePoint} from "./calendar";
 
 enum Outgoing {
   SET_ADDRESS,

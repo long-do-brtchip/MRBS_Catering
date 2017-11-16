@@ -1,7 +1,7 @@
 import {EventEmitter} from "events";
 import ref = require("ref");
 import StructType = require("ref-struct");
-import {ITimelineRequest} from "./calender";
+import {ITimelineRequest} from "./calendar";
 import {log} from "./log";
 import {PanLPath} from "./path";
 

@@ -8,18 +8,18 @@ import {
 } from "ews-javascript-api";
 import {Cache} from "./cache";
 import {
-  ICalender, ICalenderNotification, IMeetingInfo,
+  ICalendar, ICalendarNotification, IMeetingInfo,
   ITimelineEntry, ITimelineRequest, ITimePoint,
-} from "./calender";
+} from "./calendar";
 import {PanLPath} from "./path";
-import {CalenderType, ICalenderConfig, IHubConfig} from "./persist";
+import {CalendarType, ICalendarConfig, IHubConfig} from "./persist";
 import {Time} from "./time";
 
-export class EWSCalender implements ICalender {
+export class EWSCalendar implements ICalendar {
   private service: ExchangeService;
 
-  constructor(private notify: ICalenderNotification,
-              private cache: Cache, config: ICalenderConfig,
+  constructor(private notify: ICalendarNotification,
+              private cache: Cache, config: ICalendarConfig,
               private configHub: IHubConfig) {
     EwsLogging.DebugLogEnabled = true;
     // TODO: auto detect exchange server version

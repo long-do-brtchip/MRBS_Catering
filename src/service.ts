@@ -2,8 +2,8 @@ import {EventEmitter} from "events";
 import {MessageBuilder} from "./builder";
 import {Cache} from "./cache";
 import {
-  CalenderManager, IMeetingInfo, ITimelineEntry, ITimelineRequest, ITimePoint,
-} from "./calender";
+  CalendarManager, IMeetingInfo, ITimelineEntry, ITimelineRequest, ITimePoint,
+} from "./calendar";
 import {log} from "./log";
 import {PanLPath} from "./path";
 import {IRoom, Persist} from "./persist";
@@ -31,7 +31,7 @@ export class PanLService extends EventEmitter {
   }
 
   private tx: Transmit;
-  private cal: CalenderManager;
+  private cal: CalendarManager;
 
   private constructor(private refCnt = 1) {
     super();
@@ -62,7 +62,7 @@ export class PanLService extends EventEmitter {
     this.on("update", this.onUpdate);
 
     this.tx = new Transmit(PanLService.persist, this);
-    this.cal = new CalenderManager(
+    this.cal = new CalendarManager(
       PanLService.cache, PanLService.persist, this);
     this.cal.connect();
   }
@@ -79,14 +79,14 @@ export class PanLService extends EventEmitter {
   }
 
   private onCalMgrReady(): void {
-    log.info("Calender manager is online");
+    log.info("Calendar manager is online");
     PanLService.cache.consumePending((path) => {
       this.initPanel(path);
     });
   }
 
   private onCalMgrError(err: Error): void {
-    log.error(`Failed to start Calender Manager ${err},` +
+    log.error(`Failed to start Calendar Manager ${err},` +
       `will try again in 30seconds`);
     setTimeout(this.cal.connect, 30 * 1000);
   }

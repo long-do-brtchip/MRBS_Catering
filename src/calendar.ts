@@ -1,10 +1,10 @@
 import {EventEmitter} from "events";
 import {Cache} from "./cache";
-import {EWSCalender} from "./ews";
+import {EWSCalendar} from "./ews";
 import {log} from "./log";
-import {MockupCalender} from "./mockup";
+import {MockupCalendar} from "./mockup";
 import {PanLPath} from "./path";
-import {CalenderType, Persist} from "./persist";
+import {CalendarType, Persist} from "./persist";
 
 export interface ITimelineEntry {
   start: number;
@@ -27,7 +27,7 @@ export interface ITimelineRequest {
   maxCount: number;
 }
 
-export interface ICalender {
+export interface ICalendar {
   getTimeline(path: PanLPath, dayOffset: number): Promise<boolean>;
   createBooking(path: PanLPath, id: ITimePoint, duration: number):
     Promise<void>;
@@ -38,15 +38,15 @@ export interface ICalender {
   cancelUnclaimedMeeting(path: PanLPath, id: ITimePoint): Promise<void>;
 }
 
-export interface ICalenderNotification {
+export interface ICalendarNotification {
   onExtendNotification(path: PanLPath, id: ITimePoint, duration: number): void;
   onAddNotification(path: PanLPath, id: ITimePoint, duration: number): void;
   onDeleteNotification(path: PanLPath, id: ITimePoint): void;
   onUpdateNotification(path: PanLPath, id: ITimePoint): void;
 }
 
-export class CalenderManager implements ICalenderNotification {
-  private calender: ICalender;
+export class CalendarManager implements ICalendarNotification {
+  private calendar: ICalendar;
   private isConnected: boolean;
 
   constructor(
@@ -69,7 +69,7 @@ export class CalenderManager implements ICalenderNotification {
     let entries = await this.cache.getTimeline(path, req);
     if (entries === undefined) {
       // get timeline from External server and cached
-      const isHave = await this.calender.getTimeline(path, req.id.dayOffset);
+      const isHave = await this.calendar.getTimeline(path, req.id.dayOffset);
       // get in cache again
       entries = isHave ? (await this.cache.getTimeline(path, req) || []) : [];
     }
@@ -86,24 +86,24 @@ export class CalenderManager implements ICalenderNotification {
 
   public createBooking(path: PanLPath, id: ITimePoint, duration: number):
   Promise<void> {
-    return this.calender.createBooking(path, id, duration);
+    return this.calendar.createBooking(path, id, duration);
   }
 
   public extendMeeting(path: PanLPath, id: ITimePoint, duration: number):
   Promise<void> {
-    return this.calender.extendMeeting(path, id, duration);
+    return this.calendar.extendMeeting(path, id, duration);
   }
 
   public endMeeting(path: PanLPath, id: ITimePoint): Promise<void> {
-    return this.calender.endMeeting(path, id);
+    return this.calendar.endMeeting(path, id);
   }
 
   public cancelMeeting(path: PanLPath, id: ITimePoint): Promise<void> {
-    return this.calender.cancelMeeting(path, id);
+    return this.calendar.cancelMeeting(path, id);
   }
 
   public cancelUnclaimedMeeting(path: PanLPath, id: ITimePoint): Promise<void> {
-    return this.calender.cancelUnclaimedMeeting(path, id);
+    return this.calendar.cancelUnclaimedMeeting(path, id);
   }
 
   public onAddNotification(path: PanLPath, id: ITimePoint, duration: number):
@@ -129,24 +129,24 @@ export class CalenderManager implements ICalenderNotification {
   }
 
   public async connect(): Promise<void> {
-    log.info("Start Calender Manager...");
+    log.info("Start Calendar Manager...");
 
     try {
-      const config = await this.persist.getCalenderConfig();
+      const config = await this.persist.getCalendarConfig();
       const configHub = await this.persist.getHubConfig();
 
       switch (config.type) {
-        case CalenderType.UNCONFIGURED:
-          log.info("Calender is not configured.");
+        case CalendarType.UNCONFIGURED:
+          log.info("Calendar is not configured.");
           return;
-        case CalenderType.EXCHANGE:
-        case CalenderType.OFFICE365:
-          this.calender = new EWSCalender(this, this.cache, config, configHub);
+        case CalendarType.EXCHANGE:
+        case CalendarType.OFFICE365:
+          this.calendar = new EWSCalendar(this, this.cache, config, configHub);
           break;
-        case CalenderType.GOOGLE:
+        case CalendarType.GOOGLE:
           throw new Error("Method not implemented.");
-        case CalenderType.MOCKUP:
-          this.calender = new MockupCalender(this, this.cache);
+        case CalendarType.MOCKUP:
+          this.calendar = new MockupCalendar(this, this.cache);
           break;
       }
     } catch (err) {

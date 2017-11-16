@@ -70,9 +70,9 @@ describe("Persist module", function foo() {
       assert(room === undefined);
     });
   });
-  describe("calender", () => {
-    it("should be able to set calender setting");
-    it("should be able to get calender setting");
-    it("shall generate default calender setting after factory reset");
+  describe("calendar", () => {
+    it("should be able to set calendar setting");
+    it("should be able to get calendar setting");
+    it("shall generate default calendar setting after factory reset");
   });
 });

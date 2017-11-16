@@ -1,12 +1,12 @@
 import {Cache} from "./cache";
 import {
-  ICalender, ICalenderNotification, IMeetingInfo,
+  ICalendar, ICalendarNotification, IMeetingInfo,
   ITimelineEntry, ITimelineRequest, ITimePoint,
-} from "./calender";
+} from "./calendar";
 import {PanLPath} from "./path";
 
-export class MockupCalender implements ICalender {
-  constructor(private notify: ICalenderNotification,
+export class MockupCalendar implements ICalendar {
+  constructor(private notify: ICalendarNotification,
               private cache: Cache) {
   }
 

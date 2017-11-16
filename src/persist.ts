@@ -6,7 +6,7 @@ import {Config, ConfigType} from "./entity/config";
 import {Link} from "./entity/link";
 import {log} from "./log";
 
-export enum CalenderType {
+export enum CalendarType {
   UNCONFIGURED,
   EXCHANGE,
   OFFICE365,
@@ -19,8 +19,8 @@ export enum AddressFamily {
   IPv6,
 }
 
-export interface ICalenderConfig {
-  type: CalenderType;
+export interface ICalendarConfig {
+  type: CalendarType;
   address: string;
   username: string;
   password: string;
@@ -78,16 +78,16 @@ export class Persist {
     }
   }
 
-  public async getCalenderConfig(): Promise<ICalenderConfig> {
+  public async getCalendarConfig(): Promise<ICalendarConfig> {
     const v = await Config.findOne(
-      {where: {id: ConfigType.CALENDER_CONFIG}}) as Config;
+      {where: {id: ConfigType.CALENDAR_CONFIG}}) as Config;
 
     if (v === undefined) {
       // TODO: set default to UNCONFIGURED
-      // return {type: CalenderType.UNCONFIGURED, address: "",
+      // return {type: CalendarType.UNCONFIGURED, address: "",
       // username: "", password: "", readonly: true};
       return {
-        type: CalenderType.MOCKUP,
+        type: CalendarType.MOCKUP,
         address: "https://outlook.office365.com/EWS/Exchange.asmx",
         username: "tan@hanhzz.onmicrosoft.com",
         password: "T@nt3sting",
@@ -98,16 +98,16 @@ export class Persist {
     }
   }
 
-  public async setCalenderConfig(cfg: ICalenderConfig): Promise<void> {
+  public async setCalendarConfig(cfg: ICalendarConfig): Promise<void> {
     let v = await Config.findOne(
-      {where: {id: ConfigType.CALENDER_CONFIG}}) as Config;
+      {where: {id: ConfigType.CALENDAR_CONFIG}}) as Config;
     if (v === undefined) {
       v = new Config();
-      v.id = ConfigType.CALENDER_CONFIG;
+      v.id = ConfigType.CALENDAR_CONFIG;
     }
     v.val = JSON.stringify(cfg);
     v.save();
-    // TODO: Try connect to calender, broadcast PanL changes in caller function
+    // TODO: Try connect to calendar, broadcast PanL changes in caller function
   }
 
   public async addRoom(room: IRoom): Promise<void> {

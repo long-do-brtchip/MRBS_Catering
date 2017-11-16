@@ -1,5 +1,5 @@
 import * as moment from "moment";
-import {ITimelineEntry, ITimelineRequest} from "./calender";
+import {ITimelineEntry, ITimelineRequest} from "./calendar";
 
 export interface IHourMinute {
   hour: number;

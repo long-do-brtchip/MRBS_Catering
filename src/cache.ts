@@ -2,7 +2,7 @@ import * as redis from "ioredis";
 import {
   IMeetingInfo, ITimelineEntry,
   ITimelineRequest, ITimePoint,
-} from "./calender";
+} from "./calendar";
 import {log} from "./log";
 import {PanLPath} from "./path";
 import {IRoom, Persist} from "./persist";
