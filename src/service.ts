@@ -114,11 +114,12 @@ export class PanLService extends EventEmitter {
     const room = await PanLService.persist.findRoom(uuid);
 
     if (room !== undefined) {
+      log.verbose(`Connect ${path} to room ${room.name}`);
       await PanLService.cache.addConfigured(path, room);
       if (this.cal.connected) {
-        this.initPanel(path);
+        await this.initPanel(path);
       } else {
-        PanLService.cache.addPending(path);
+        await PanLService.cache.addPending(path);
       }
     } else {
       this.showUnconfigured(path,
@@ -300,7 +301,7 @@ export class PanLService extends EventEmitter {
         now >= entriesBefore[0].end;
       const entries = ignoreBefore
         ? entriesAfter : entriesBefore.concat(entriesAfter);
-      log.debug(`Request ${path} set room name to ${name}, busy slot: ` +
+      log.debug(`Request ${path} set room name to ${name}, busy slot(s): ` +
         entries.length);
       if (entries.length === 0) {
         this.tx.send(path, [

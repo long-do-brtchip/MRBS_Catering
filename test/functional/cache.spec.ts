@@ -59,6 +59,15 @@ describe("Cache module", () => {
       expect(await cache.addUnconfigured(new PanLPath(1, 1), uuids[0]))
         .to.equal(id);
     });
+    it("should return unconfigured ID", async () => {
+      const id = await cache.addUnconfigured(new PanLPath(1, 1), uuids[0]);
+      const ret = await cache.getUnconfigured(id);
+      assert(ret);
+      if (ret) {
+        const [path, uuid] = ret;
+        expect(path.dest).to.equal(1);
+      }
+    });
   });
   const path1 = new PanLPath(1, 1);
   const path2 = new PanLPath(1, 2);

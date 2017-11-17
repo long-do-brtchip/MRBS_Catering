@@ -158,26 +158,29 @@ export class Cache {
   public async addUnconfigured(path: PanLPath, uuid: Buffer): Promise<number> {
     if (await this.client.exists(Cache.pathToIdKey(path))) {
       const id = await this.client.get(Cache.pathToIdKey(path));
-      this.client.set(Cache.idToUuidKey(id), uuid);
-      return this.client.get(Cache.pathToIdKey(path));
+      await this.client.set(Cache.idToUuidKey(id), uuid);
+      return id;
     }
     const idx = await this.client.incr(Cache.SEQUENCE_KEY) as number;
-    this.client.set(Cache.idToUuidKey(idx), uuid);
-    this.client.set(Cache.idToPathKey(idx), path);
-    this.client.set(Cache.pathToIdKey(path), idx);
+    await Promise.all([
+      this.client.set(Cache.idToUuidKey(idx), uuid),
+      this.client.set(Cache.idToPathKey(idx), JSON.stringify(path)),
+      this.client.set(Cache.pathToIdKey(path), idx),
+    ]);
     return idx;
   }
 
   public async getUnconfigured(idx: number):
   Promise<[PanLPath, Buffer] | undefined> {
-    const [path, buf] = await Promise.all([
+    const [pathStr, buf] = await Promise.all([
       this.client.get(Cache.idToPathKey(idx)),
       this.client.getBuffer(Cache.idToUuidKey(idx)),
     ]);
-    if (path == null || buf == null) {
+    if (pathStr == null || buf == null) {
       return undefined;
     } else {
-      return [path, buf];
+      const path = JSON.parse(pathStr);
+      return [new PanLPath(path.agentID, path.mstpAddress), buf];
     }
   }
 

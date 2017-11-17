@@ -21,8 +21,8 @@ export class PanLSocketController implements IMessageTransport {
       socket.on("data", (data) => {
           if (s.parser) {
             try {
-              log.silly(`Received ${data.byteLength} bytes from agent ` +
-                `${s.parser.path.agent}: ${data.toString("hex")}`);
+              log.silly(`Received ${data.byteLength} bytes from` +
+                `${s.parser.path}: ${data.toString("hex")}`);
               s.parser.onData(data);
             } catch (e) {
               log.debug(`Failed to parse: ${e}, close socket.`);
@@ -115,7 +115,7 @@ export class PanLSocketController implements IMessageTransport {
     }
     socket.write(hdr);
     for (const payload of payloads) {
-      log.silly(`Write ${payload.toString("hex")}`);
+      log.silly(`Write ${payload.toString("hex")} to ${path}`);
       socket.write(payload);
     }
   }

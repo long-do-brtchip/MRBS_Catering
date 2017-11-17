@@ -82,7 +82,7 @@ api.route("/panl/:id/:address").get(async (req, res) => {
     const [path, uuid] = panl;
     const persist = await Persist.getInstance();
     if (undefined !== await persist.findRoomUuid(req.params.address)) {
-      persist.linkPanL(uuid, req.params.address);
+      await persist.linkPanL(uuid, req.params.address);
       const service = await PanLService.getInstance();
       service.emit("uuid", path, uuid);
       service.stop();
