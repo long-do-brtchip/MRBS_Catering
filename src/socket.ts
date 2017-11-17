@@ -21,8 +21,8 @@ export class PanLSocketController implements IMessageTransport {
       socket.on("data", (data) => {
           if (s.parser) {
             try {
-              log.silly(`Received ${data.byteLength} bytes from` +
-                `${s.parser.path}: ${data.toString("hex")}`);
+              log.silly(`Received ${data.byteLength} bytes from Agent` +
+                `${s.parser.id}: ${data.toString("hex")}`);
               s.parser.onData(data);
             } catch (e) {
               log.debug(`Failed to parse: ${e}, close socket.`);
@@ -45,23 +45,23 @@ export class PanLSocketController implements IMessageTransport {
       socket.on("end", () => {
         if (s.parser !== void 0) {
           log.debug("Received socket end event");
-          this.sockets.delete(s.parser.path.agent);
-          s.parser.notify("agentEnd");
+          this.sockets.delete(s.parser.id);
+          s.parser.notifyAgent("agentEnd");
         }
       });
 
       socket.on("error", (err) => {
         if (s.parser !== void 0) {
           log.debug("Received socket error event");
-          this.sockets.delete(s.parser.path.agent);
-          s.parser.notify("agentError", err);
+          this.sockets.delete(s.parser.id);
+          s.parser.notifyAgent("agentError", err);
         }
       });
 
       socket.on("drain", () => {
         log.silly("Received socket drain event");
         if (s.parser !== void 0) {
-          s.parser.notify("txDrain");
+          s.parser.notifyAgent("txDrain");
         }
       });
 
@@ -76,8 +76,8 @@ export class PanLSocketController implements IMessageTransport {
 
     server.listen(port, () => {
       this.stop.on("stop", () => {
-        for (const [agent, socket] of this.sockets) {
-          log.info(`Closing socket for agent ${agent}...`);
+        for (const [id, socket] of this.sockets) {
+          log.info(`Closing socket for agent ${id}...`);
           socket.end();
         }
         log.info("Closing server...");
@@ -95,7 +95,7 @@ export class PanLSocketController implements IMessageTransport {
     const hdr = MessageBuilder.buildBroadcastTarget(
       Transmit.getTotalLength(payloads));
 
-    for (const [agent, socket] of this.sockets) {
+    for (const [id, socket] of this.sockets) {
         socket.write(hdr);
         for (const payload of payloads) {
             socket.write(payload);

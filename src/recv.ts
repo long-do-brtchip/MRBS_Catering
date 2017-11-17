@@ -65,8 +65,6 @@ export class MessageParser {
     return buffer.slice(1);
   }
 
-  private static getBody = false;
-
   private static verifyLength(buffer: Buffer, min: number): Buffer {
     if (buffer.length >= min) {
       return buffer.slice(min);
@@ -76,16 +74,20 @@ export class MessageParser {
       `but only got ${buffer.length}`);
   }
 
-  public path: PanLPath;
+  private path: PanLPath;
+  private getBody = false;
 
-  constructor(private event: EventEmitter, id: number) {
-    log.silly(`Create MessageParser for agent ${id}`);
-    this.path = new PanLPath(id, 0);
-    this.notify("agentConnected");
+  constructor(private event: EventEmitter, public id: number) {
+    log.silly(`Create MessageParser for agent ${this.id}`);
+    this.notifyAgent("agentConnected");
   }
 
   public notify(evt: string, ...args: any[]): void {
     this.event.emit(evt, this.path, ...args);
+  }
+
+  public notifyAgent(evt: string, ...args: any[]): void {
+    this.event.emit(evt, this.id, ...args);
   }
 
   public onData(buffer: Buffer): void {
@@ -105,14 +107,14 @@ export class MessageParser {
           throw new Error("Method not implemented.");
         case Incoming.SET_ADDRESS:
           next = MessageParser.verifyLength(buffer, 1);
-          this.path.dest = buffer[0];
+          this.path = new PanLPath(this.id, buffer[0]);
           break;
         case Incoming.REPORT_UUID:
           next = MessageParser.verifyLength(buffer, 8);
-          this.notify("uuid", buffer);
+          this.notify("uuid", buffer.slice(0, 8));
           break;
         case Incoming.REPORT_DEVICE_CHANGE:
-          this.notify("deviceChange");
+          this.notifyAgent("deviceChange");
           break;
         case Incoming.REPORT_PANL_STATUS:
           next = MessageParser.verifyLength(buffer, 1);
@@ -133,13 +135,13 @@ export class MessageParser {
           break;
         }
         case Incoming.GET_MEETING_BODY:
-          MessageParser.getBody = true;
+          this.getBody = true;
           break;
         case Incoming.GET_MEETING_INFO: {
           next = MessageParser.verifyLength(buffer, StructGetMeetingInfo.size);
           this.notify("getMeetingInfo",
-            StructGetMeetingInfo(buffer).minutes, MessageParser.getBody);
-          MessageParser.getBody = false;
+            StructGetMeetingInfo(buffer).minutes, this.getBody);
+          this.getBody = false;
           break;
         }
         case Incoming.EXTEND_MEETING: {

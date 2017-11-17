@@ -38,13 +38,13 @@ export class PanLService extends EventEmitter {
     this.on("calMgrReady", this.onCalMgrReady);
     this.on("calMgrError", this.onCalMgrError);
 
-    this.on("agentConnected", this.onAgentConnected);
+    this.on("agentConnected", this.broadcastInitSettings);
     this.on("agentEnd", this.onAgentEnd);
     this.on("agentError", this.onAgentError);
     this.on("txDrain", this.onTxDrain);
+    this.on("deviceChange", this.onDeviceChange);
 
     this.on("uuid", this.onReportUUID);
-    this.on("deviceChange", this.onDeviceChange);
     this.on("status", this.onStatus);
     this.on("gettime", this.onGetTime);
     this.on("requestFirmware", this.onRequestFirmware);
@@ -91,23 +91,22 @@ export class PanLService extends EventEmitter {
     setTimeout(this.cal.connect, 30 * 1000);
   }
 
-  private onAgentConnected(path: PanLPath): void {
-    /* Send command to ask PanLs report UUID */
-    log.debug(`Agent ${path.agent} connected`);
-    this.broadcastInitSettings(path.agent);
+  private onAgentEnd(id: number): void {
+    log.debug(`Agent ${id} end`);
+    PanLService.cache.removeAgent(id);
   }
 
-  private onAgentEnd(path: PanLPath): void {
-    log.debug(`Agent ${path.agent} end`);
-    PanLService.cache.removeAgent(path.agent);
+  private onAgentError(id: number, err: Error): void {
+    log.info(`Agent ${id} error: ${err}`);
   }
 
-  private onAgentError(path: PanLPath, err: Error): void {
-    log.info(`Agent ${path.agent} error: ${err}`);
+  private onTxDrain(id: number): void {
+    this.tx.onDrain(id);
   }
 
-  private onTxDrain(path: PanLPath): void {
-    this.tx.onDrain(path.agent);
+  private onDeviceChange(id: number): void {
+    PanLService.cache.removeAgent(id);
+    this.tx.broadcast(id, [MessageBuilder.buildUUID()]);
   }
 
   private async onReportUUID(path: PanLPath, uuid: Buffer): Promise<void> {
@@ -125,13 +124,6 @@ export class PanLService extends EventEmitter {
       this.showUnconfigured(path,
         await PanLService.cache.addUnconfigured(path, uuid));
     }
-  }
-
-  private onDeviceChange(path: PanLPath): void {
-    PanLService.cache.removeAgent(path.agent);
-    this.tx.broadcast(path.agent, [
-      MessageBuilder.buildUUID(),
-    ]);
   }
 
   private onStatus(path: PanLPath, status: number): void {
