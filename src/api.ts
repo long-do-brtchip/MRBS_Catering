@@ -77,21 +77,21 @@ api.route("/panl/:id/:address").get(async (req, res) => {
   }
   const cache = await Cache.getInstance();
   const panl = await cache.getUnconfigured(Number(req.params.id));
-  cache.stop();
-  if (panl !== undefined) {
-    const [path, uuid] = panl;
-    const persist = await Persist.getInstance();
-    if (undefined !== await persist.findRoomUuid(req.params.address)) {
-      await persist.linkPanL(uuid, req.params.address);
-      const service = await PanLService.getInstance();
-      service.emit("uuid", path, uuid);
-      service.stop();
-    } else {
-      return res.status(410).send(`Invalid room address ${req.params.address}`);
-    }
-    persist.stop();
-  } else {
+  await cache.stop();
+  if (panl === undefined) {
     return res.status(410).send(`Invalid id ${req.params.id}`);
   }
-  res.sendStatus(204);
+
+  const [path, uuid] = panl;
+  const persist = await Persist.getInstance();
+  if (undefined === await persist.findRoomUuid(req.params.address)) {
+    await persist.stop();
+    return res.status(410).send(`Invalid room address ${req.params.address}`);
+  }
+
+  await persist.linkPanL(uuid, req.params.address);
+  const service = await PanLService.getInstance();
+  service.emit("uuid", path, uuid);
+  await Promise.all([service.stop(), persist.stop()]);
+  return res.sendStatus(204);
 });
