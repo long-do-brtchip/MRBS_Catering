@@ -58,6 +58,9 @@ origin  git@github.com:ftdichipsg/MRBS.git (push)
 * debug: used by developer to debug issues
 * silly: information even developer doesn't care most of the time
 
+## RESTful API design guideline
+Please following the https://github.com/Microsoft/api-guidelines/blob/vNext/Guidelines.md
+
 ## Automated script to install hub command on Linux
 ```bash
 #!/bin/bash
