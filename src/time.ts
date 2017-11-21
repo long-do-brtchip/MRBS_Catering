@@ -1,5 +1,6 @@
 import * as moment from "moment";
-import {ITimelineRequest} from "./calendar";
+import {ITimelineEntry, ITimelineRequest} from "./calendar";
+import {log} from "./log";
 
 export interface IHourMinute {
   hour: number;
@@ -81,6 +82,14 @@ export class Time {
     }
 
     return result;
+  }
+
+  public static convertToDayOffset(src: string)
+  : number {
+    const day: moment.Moment = moment(src);
+    log.error("Off: ", src, day, moment().startOf("day").toDate());
+
+    return day.diff(moment().startOf("day"), "days");
   }
 
 }

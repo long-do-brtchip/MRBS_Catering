@@ -5,6 +5,8 @@ import {
 } from "./calendar";
 import {Database} from "./database";
 import {Room} from "./entity/hub/room";
+import {IEwsCache} from "./ews";
+import {HubError} from "./huberror";
 import {log} from "./log";
 import {PanLPath} from "./path";
 import {Persist} from "./persist";
@@ -57,6 +59,7 @@ export class Cache {
   private static readonly TIMELINE_PREFIX = "timeline";
   private static readonly MEETING_PREFIX = "meeting";
   private static readonly MEETINGID_PREFIX = "meeting_id";
+  private static readonly PATH_MEETINGID_PREFIX = "path-meeting_id";
 
   private static pathToIdKey(path: PanLPath): string {
     return `path-id:${path.uid}`;
@@ -108,6 +111,16 @@ export class Cache {
   private static hashTimelineKey(path: PanLPath, id: ITimePoint):
   string {
     return Cache.TIMELINE_PREFIX + Cache.meetingUID(path, id);
+  }
+
+  private static pathToMeetingIdKey(path: PanLPath, id: ITimePoint):
+  string {
+    return Cache.PATH_MEETINGID_PREFIX + Cache.meetingUID(path, id);
+  }
+
+  private static meetingIdToPathKey(meetingId: string):
+  string {
+    return `meeting_id-path:${meetingId}`;
   }
 
   private expiry = 0;
@@ -312,10 +325,28 @@ export class Cache {
     ]);
   }
 
+  public async getTimelineEntry(path: PanLPath, id: ITimePoint):
+  Promise<ITimelineEntry> {
+    const key: string = Cache.hashTimelineKey(path, id);
+    const result = await this.client.hgetall(key);
+    if (!result || Object.keys(result).length === 0) {
+      throw(
+        new HubError("Timeline entry not found", "TIMELINE_ENTRY_NOT_FOUND"));
+    }
+    result.start = parseInt(result.start, 10);
+    result.end = parseInt(result.end, 10);
+
+    return result;
+  }
+
   public async removeTimelineEntry(path: PanLPath, id: ITimePoint):
   Promise<void> {
     const uid = Cache.meetingUID(path, id);
-    await this.removeTimelineEntryAndRelatedInfo(uid);
+    const shadowKey = Cache.SHADOW_PREFIX + Cache.hashTimelineKey(path, id);
+    Promise.all([
+      this.client.del(shadowKey),
+      this.removeTimelineEntryAndRelatedInfo(uid),
+      ]);
   }
 
   public async setMeetingInfo(path: PanLPath, id: ITimePoint,
@@ -350,6 +381,34 @@ export class Cache {
   Promise<void> {
     const key = Cache.hashMeetingIdKey(path, id);
     await this.client.set(key, meetingId);
+    const pathKey = Cache.pathToMeetingIdKey(path, id);
+    const meetingIdkey = Cache.meetingIdToPathKey(meetingId);
+    const dayOffsetStr = Time.dayOffsetToString(id.dayOffset);
+
+    // save path-meeting and meeting-path
+    await Promise.all([
+      this.client.set(pathKey, meetingId),
+      this.client.hmset(meetingIdkey, {
+        dayOffsetStr,
+        minutesOfDay: id.minutesOfDay,
+        agentID: path.agent,
+        mstpAddress: path.dest,
+      }),
+    ]);
+  }
+
+  public async getEwsCacheByMeetingId(meetingId: string):
+  Promise<IEwsCache> {
+    const result =
+      await this.client.hgetall(Cache.meetingIdToPathKey(meetingId));
+    if (!result || Object.keys(result).length === 0) {
+      throw(new HubError("ews cache not found", "EWS_CACHE_FOUND"));
+    }
+
+    result.minutesOfDay = parseInt(result.minutesOfDay, 10);
+    result.agentID = parseInt(result.agentID, 10);
+    result.mstpAddress = parseInt(result.mstpAddress, 10);
+    return result;
   }
 
   public setExpiry(val: number): void {
@@ -430,10 +489,14 @@ export class Cache {
   }
 
   private async removeTimelineEntryAndRelatedInfo(uid: string): Promise<void> {
+    const meetingId = await this.client.get(Cache.PATH_MEETINGID_PREFIX + uid);
+
     await Promise.all([
       this.client.del(Cache.MEETINGID_PREFIX + uid),
       this.client.del(Cache.MEETING_PREFIX + uid),
       this.client.del(Cache.TIMELINE_PREFIX + uid),
+      this.client.del(Cache.PATH_MEETINGID_PREFIX + uid),
+      this.client.del(Cache.meetingIdToPathKey(meetingId)),
     ]);
   }
 

@@ -4,7 +4,7 @@
   "description": "PanL Hub",
   "main": "src/index.ts",
   "scripts": {
-    "start": "npm run build && npm run web && npm run watch",
+    "start": "npm run build && npm run watch",
     "watch": "nodemon -e ts -w ./src -x npm run serve",
     "serve": "ts-node --inspect src/index.ts",
     "build": "tsc --skipLibCheck && npm run tslint",

@@ -1,20 +1,30 @@
 import {
   Appointment, AppointmentSchema, AutodiscoverService,
   CalendarView, ConflictResolutionMode, ConnectingIdType, DateTime,
-  EwsLogging, ExchangeService, ExchangeVersion, Folder,
-  ImpersonatedUserId, Item, ItemId, PropertySet, SendInvitationsMode,
-  SendInvitationsOrCancellationsMode, Uri,
+  EventType, EwsLogging, ExchangeService, ExchangeVersion, Folder, FolderId,
+  ImpersonatedUserId, Item, ItemEvent, ItemId, NotificationEventArgs,
+  PropertySet, SendInvitationsMode, SendInvitationsOrCancellationsMode,
+  StreamingSubscriptionConnection, SubscriptionErrorEventArgs, Uri,
   WebCredentials, WellKnownFolderName,
 } from "ews-javascript-api";
+import * as moment from "moment";
 import {ErrorCode} from "./builder";
 import {Cache} from "./cache";
 import {
   ICalendar, ICalendarNotification, IMeetingInfo,
   ITimelineEntry, ITimelineRequest, ITimePoint,
 } from "./calendar";
+import {log} from "./log";
 import {PanLPath} from "./path";
-import {CalendarType, ICalendarConfig, IHubConfig} from "./persist";
+import {ICalendarConfig, IHubConfig} from "./persist";
 import {Time} from "./time";
+
+export interface IEwsCache {
+  dayOffsetStr: string;
+  minutesOfDay: number;
+  agentID: number;
+  mstpAddress: number;
+}
 
 export class EWSCalendar implements ICalendar {
   private service: ExchangeService;
@@ -29,6 +39,8 @@ export class EWSCalendar implements ICalendar {
     this.service.Credentials = new WebCredentials(
       config.username, config.password);
     this.service.Url = new Uri(config.address);
+
+    this.streamNotification();
   }
 
   public async getTimeline(path: PanLPath, dayOffset: number):
@@ -52,16 +64,16 @@ export class EWSCalendar implements ICalendar {
     const task: any[] = [];
     // extract meeting info
     for (const meeting of meetingResponse.Items) {
-      const start: number = meeting.Start.Hour * 60 + meeting.Start.Minute;
-      const end: number = meeting.End.Hour * 60 + meeting.End.Minute;
-      result.push({start, end});
+      const timelineEntry =
+        this.parseToTimelineEntry(meeting.Start, meeting.End);
+      result.push(timelineEntry);
       // save meetingInfo
       task.push(this.cache.setMeetingInfo(path,
-        {dayOffset, minutesOfDay: start},
+        {dayOffset, minutesOfDay: timelineEntry.start},
         {subject: meeting.Subject, organizer: meeting.Organizer.Name}));
       // save meetingId
       task.push(this.cache.setMeetingId(path,
-        {dayOffset, minutesOfDay: start},
+        {dayOffset, minutesOfDay: timelineEntry.start},
         meeting.Id.UniqueId));
     }
     task.push(this.cache.setTimeline(path, dayOffset, result));
@@ -79,7 +91,7 @@ export class EWSCalendar implements ICalendar {
     // Create the appointment.
     const appointment = new Appointment(this.service);
     const roomName = await this.cache.getRoomName(path);
-    const roomAdress = await this.cache.getRoomAddress(path);
+    const roomAddress = await this.cache.getRoomAddress(path);
     const msStart = Time.getMiliseconds(id.dayOffset, id.minutesOfDay);
 
     // Set properties on the appointment.
@@ -88,7 +100,7 @@ export class EWSCalendar implements ICalendar {
     appointment.End = new DateTime(Time.extendTime(msStart, duration));
     appointment.Location = roomName;
     // cancel meeting required
-    appointment.RequiredAttendees.Add(roomAdress);
+    appointment.RequiredAttendees.Add(roomAddress);
 
     // Save the meeting to the Calendar folder and send the meeting request.
     await appointment.Save(SendInvitationsMode.SendToNone);
@@ -191,9 +203,166 @@ export class EWSCalendar implements ICalendar {
     return true;
   }
 
+  public async handleNotification(meetingId: string, type: EventType):
+  Promise<void> {
+    const appointmentId = new ItemId(meetingId);
+    let path: PanLPath = new PanLPath(0, 0);
+    let newTimePoint = {dayOffset: -1, minutesOfDay: -1};
+    let ewsCache = {
+      dayOffsetStr: "",
+      minutesOfDay: -1,
+      agentID: -1,
+      mstpAddress: -1,
+    };
+    let newMeeting = {subject: "", organizer: ""};
+    let duration = -1;
+
+    try {
+      // Instantiate an appointment object by binding to it using the ItemId.
+      const meeting = await Appointment.Bind(this.service, appointmentId);
+      // path throw exception if not existed
+      ewsCache = await this.cache.getEwsCacheByMeetingId(meetingId);
+      path = new PanLPath(ewsCache.agentID, ewsCache.mstpAddress);
+      const {start, end} =
+        this.parseToTimelineEntry(meeting.Start, meeting.End);
+      const dayOffset = this.countDayOffset(meeting.Start);
+      newTimePoint = {dayOffset, minutesOfDay: start};
+      duration = meeting.Duration.TotalMinutes;
+      const newOrganizer = meeting.Organizer.Name;
+      newMeeting = {
+        subject: meeting.Subject,
+        organizer: newOrganizer,
+      };
+      if (type === EventType.Created) {
+        // save in cache without timeline entry and call add notification
+        Promise.all([
+          this.cache.setMeetingInfo(path,
+            {dayOffset, minutesOfDay: start},
+            {subject: meeting.Subject, organizer: meeting.Organizer.Name}),
+          // save meetingId
+          this.cache.setMeetingId(path, newTimePoint, meetingId),
+        ]);
+
+        // notification to client
+        this.notify.onAddNotification(path,
+          {dayOffset, minutesOfDay: start}, duration);
+
+        log.debug("[notify] create new meeting");
+      } else if (type === EventType.Modified) {
+        // get meeting Info
+        const timelineEntry =
+          await this.cache.getTimelineEntry(path, newTimePoint);
+
+        log.debug("[notify] timelineEntry", timelineEntry);
+        const originMeeting =
+          await this.cache.getMeetingInfo(path, newTimePoint);
+        if (timelineEntry.end !== end) {
+          this.notify.onEndTimeChangeNofication(path, newTimePoint, duration);
+          log.debug("[notify] modified end time");
+        }
+        if (originMeeting.subject !== meeting.Subject
+          || originMeeting.organizer !== newOrganizer) {
+          await this.cache.setMeetingInfo(path, newTimePoint, newMeeting);
+          // notify to client
+          this.notify.onMeetingUpdateNotification(path, newTimePoint);
+          log.debug("[notify] modified meeting info");
+        }
+      }
+    } catch (error) {
+      switch (error.code) {
+        case "TIMELINE_ENTRY_NOT_FOUND":
+          /*  Difficult to happen, because timeline entry and ewscache will
+              will expired same time
+
+              startTime update, remove old by timePointStr, add new by timePoint
+           */
+          const oldTimePoint = {
+            dayOffset: Time.convertToDayOffset(ewsCache.dayOffsetStr),
+            minutesOfDay: ewsCache.minutesOfDay,
+          };
+
+          // remove timeline entry and related
+          this.notify.onDeleteNotification(path, oldTimePoint);
+          // notify to client
+          this.notify.onAddNotification(path, newTimePoint, duration);
+
+          await Promise.all([
+            this.cache.setMeetingInfo(path, newTimePoint, newMeeting),
+            this.cache.setMeetingId(path, newTimePoint, meetingId),
+          ]);
+
+          log.debug("[notify] modified start time");
+          break;
+        default:
+          log.warn("[notify] ", error.message);
+      }
+    }
+  }
+
+  public async streamNotification(): Promise<void> {
+    const folderId: FolderId[] = [new FolderId(
+      WellKnownFolderName.Calendar)];
+    const stream = await this.service.SubscribeToStreamingNotifications(
+      folderId,
+      EventType.Created,
+      EventType.Modified);
+
+    // Subscribe to streaming notifications in the Inbox.
+    const connection = new StreamingSubscriptionConnection(this.service, 1);
+
+    connection.AddSubscription(stream);
+    // Delegate event handlers.
+    connection.OnNotificationEvent.push((conn, args) => {
+      this.onEvent(conn, args, this);
+    });
+    // Error handler
+    connection.OnSubscriptionError.push((conn, args) => {
+      log.error("EWS stream notification:::", args.Exception.Message);
+    });
+    // Auto reconnect
+    connection.OnDisconnect.push((conn) => conn.Open());
+    // Open connected
+    connection.Open();
+
+    log.info("Start EWS StreamSubscription Event...");
+  }
+
+  public onEvent(connection: StreamingSubscriptionConnection,
+                 args: NotificationEventArgs, ews: EWSCalendar): void {
+    const subscription = args.Subscription;
+
+    const tmpSet = new Set();
+    // Loop through all item-related events.
+    for (const notification of args.Events) {
+      // prevent duplicate notification
+      const event: ItemEvent = notification as ItemEvent;
+      if (tmpSet.has(event.ItemId.UniqueId)) {
+        continue;
+      }
+      log.debug("EWS response: ",
+        notification.EventType, event.ItemId.UniqueId);
+      tmpSet.add(event.ItemId.UniqueId);
+      ews.handleNotification(event.ItemId.UniqueId, notification.EventType);
+    }
+  }
+
   private async impersonationSupport(path: PanLPath) {
     this.service.ImpersonatedUserId =
       new ImpersonatedUserId(ConnectingIdType.SmtpAddress,
         await this.cache.getRoomAddress(path));
+  }
+
+  private countDayOffset(dateTime: DateTime)
+  : number {
+    const day: moment.Moment = moment(dateTime.TotalMilliSeconds);
+    return day.diff(moment().startOf("day"), "days");
+  }
+
+  private parseToTimelineEntry(start: DateTime, end: DateTime)
+  : ITimelineEntry {
+    return {
+      start: start.Hour * 60 + start.Minute,
+      end: end.Hour * 60 + end.Minute,
+    };
   }
 }
