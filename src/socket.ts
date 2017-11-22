@@ -1,6 +1,7 @@
 import {EventEmitter} from "events";
 import net = require("net");
 import {MessageBuilder} from "./builder";
+import {Database} from "./database";
 import {log} from "./log";
 import {PanLPath} from "./path";
 import {Persist} from "./persist";
@@ -11,8 +12,7 @@ export class PanLSocketController implements IMessageTransport {
   private sockets: Map<number, net.Socket>;
   private stop: EventEmitter;
 
-  constructor(
-    port: number, private persist: Persist, private event: EventEmitter) {
+  constructor(port: number, private event: EventEmitter) {
     this.sockets = new Map();
     this.stop = new EventEmitter();
     const server = net.createServer((socket) => {
@@ -29,11 +29,14 @@ export class PanLSocketController implements IMessageTransport {
               socket.end();
             }
           } else {
-            MessageParser.parseAgentID(data).then((buf) => {
-              this.persist.getAgentId(buf).then((id) => {
-                log.info(`Agent ${buf.toString("hex")} is using id: ${id}`);
-                this.sockets.set(id, socket);
-                s.parser = new MessageParser(this.event, id);
+            MessageParser.parseAgentID(data).then(async (buf) => {
+              Database.getInstance().then((db) => {
+                Persist.getAgentId(buf).then((id) => {
+                    log.info(`Agent ${buf.toString("hex")} is using id: ${id}`);
+                    this.sockets.set(id, socket);
+                    s.parser = new MessageParser(this.event, id);
+                  });
+                db.stop();
               });
             }).catch((reject) => {
               log.debug(`Received non Agent ID data ${data}, close socket.`);

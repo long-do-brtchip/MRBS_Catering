@@ -4,6 +4,7 @@ import {Cache} from "./cache";
 import {
   CalendarManager, IMeetingInfo, ITimelineEntry, ITimelineRequest, ITimePoint,
 } from "./calendar";
+import {Database} from "./database";
 import {log} from "./log";
 import {PanLPath} from "./path";
 import {IRoom, Persist} from "./persist";
@@ -12,7 +13,7 @@ import {Transmit} from "./xmit";
 export class PanLService extends EventEmitter {
   public static async getInstance(): Promise<PanLService> {
     if (PanLService.instance === undefined) {
-      PanLService.persist = await Persist.getInstance();
+      PanLService.db = await Database.getInstance();
       PanLService.cache = await Cache.getInstance();
       PanLService.instance = new PanLService();
     } else {
@@ -23,7 +24,7 @@ export class PanLService extends EventEmitter {
 
   private static instance: PanLService | undefined;
   private static cache: Cache;
-  private static persist: Persist;
+  private static db: Database;
 
   private static getMinutesPassed(): number {
     const date = new Date();
@@ -61,9 +62,8 @@ export class PanLService extends EventEmitter {
     this.on("delete", this.onDelete);
     this.on("update", this.onUpdate);
 
-    this.tx = new Transmit(PanLService.persist, this);
-    this.cal = new CalendarManager(
-      PanLService.cache, PanLService.persist, this);
+    this.tx = new Transmit(this);
+    this.cal = new CalendarManager(PanLService.cache, this);
     this.cal.connect();
   }
 
@@ -72,8 +72,8 @@ export class PanLService extends EventEmitter {
       this.tx.stop();
       await this.cal.disconnect();
       this.removeAllListeners();
-      await PanLService.persist.stop();
       await PanLService.cache.stop();
+      await PanLService.db.stop();
       PanLService.instance = undefined;
     }
   }
@@ -110,7 +110,7 @@ export class PanLService extends EventEmitter {
   }
 
   private async onReportUUID(path: PanLPath, uuid: Buffer): Promise<void> {
-    const room = await PanLService.persist.findRoom(uuid);
+    const room = await Persist.findRoom(uuid);
 
     if (room !== undefined) {
       log.verbose(`Connect ${path} to room ${room.name}`);

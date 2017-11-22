@@ -1,7 +1,8 @@
 import express = require("express");
 import "reflect-metadata";
 import {Cache} from "./cache";
-import {Link} from "./entity/link";
+import {Database} from "./database";
+import {Link} from "./entity/hub/link";
 import {log} from "./log";
 import {Persist} from "./persist";
 import {PanLService} from "./service";
@@ -83,15 +84,15 @@ api.route("/panl/:id/:address").get(async (req, res) => {
   }
 
   const [path, uuid] = panl;
-  const persist = await Persist.getInstance();
-  if (undefined === await persist.findRoomUuid(req.params.address)) {
-    await persist.stop();
+  const db = await Database.getInstance();
+  if (undefined === await Persist.findRoomUuid(req.params.address)) {
+    await db.stop();
     return res.status(410).send(`Invalid room address ${req.params.address}`);
   }
 
-  await persist.linkPanL(uuid, req.params.address);
+  await Persist.linkPanL(uuid, req.params.address);
   const service = await PanLService.getInstance();
   service.emit("uuid", path, uuid);
-  await Promise.all([service.stop(), persist.stop()]);
+  await Promise.all([service.stop(), db.stop()]);
   return res.sendStatus(204);
 });

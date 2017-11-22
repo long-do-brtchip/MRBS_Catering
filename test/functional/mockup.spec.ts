@@ -4,6 +4,7 @@ import {Cache} from "../../src/cache";
 import {
   CalendarManager, IMeetingInfo, ITimelineEntry, ITimelineRequest, ITimePoint,
 } from "../../src/calendar";
+import {Database} from "../../src/database";
 import {PanLPath} from "../../src/path";
 import {CalendarType, Persist} from "../../src/persist";
 import {MessageParser} from "../../src/recv";
@@ -11,24 +12,24 @@ import {MessageParser} from "../../src/recv";
 describe("Mockup calendar module", () => {
   let cache: Cache;
   let cal: CalendarManager;
-  let persist: Persist;
+  let db: Database;
   const evt = new EventEmitter();
   const path = new PanLPath(1, 1);
 
   before(async () => {
-    persist = await Persist.getInstance();
-    await persist.setCalendarConfig({
+    db = await Database.getInstance();
+    await Persist.setCalendarConfig({
       type: CalendarType.MOCKUP,
       address: "",
       username: "",
       password: "",
       readonly: false});
     cache = await Cache.getInstance();
-    cal = new CalendarManager(cache, persist, evt);
+    cal = new CalendarManager(cache, evt);
   });
   after(async () => {
     await cache.stop();
-    await persist.stop();
+    await db.stop();
   });
 
   describe("getTimeline", () => {

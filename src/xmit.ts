@@ -33,12 +33,12 @@ export class Transmit {
   private free: boolean;
   private tx: IMessageTransport;
 
-  constructor(private persist: Persist, private event: EventEmitter) {
-    if (this.event === undefined || this.persist === undefined) {
+  constructor(private event: EventEmitter) {
+    if (this.event === undefined) {
       throw(new Error("Invalid parameter"));
     }
     try {
-      this.tx = new PanLSocketController(0xF7D1, persist, event);
+      this.tx = new PanLSocketController(0xF7D1, event);
     } catch (e) {
       throw(new Error(`Unable to start controller, exit now.` +
         ` Err: ${e.toString()}`));

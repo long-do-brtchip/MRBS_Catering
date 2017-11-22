@@ -3,13 +3,14 @@ import chaiAsPromised = require("chai-as-promised");
 import {EventEmitter} from "events";
 import {Cache} from "../../src/cache";
 import {CalendarManager} from "../../src/calendar";
+import {Database} from "../../src/database";
 import {PanLPath} from "../../src/path";
 import {CalendarType, Persist} from "../../src/persist";
 
 describe("EWS module", () => {
   let cal: CalendarManager;
   let cache: Cache;
-  let persist: Persist;
+  let db: Database;
   const path1 = new PanLPath(88, 88);
 
   before(async () => {
@@ -22,24 +23,23 @@ describe("EWS module", () => {
       name: "Tokyo Room",
     });
 
-    persist = await Persist.getInstance();
+    db = await Database.getInstance();
     const event = new EventEmitter();
 
-    persist.setCalendarConfig({
+    Persist.setCalendarConfig({
       type: CalendarType.OFFICE365,
       address: "https://outlook.office365.com/EWS/Exchange.asmx",
       username: "tan@hanhzz.onmicrosoft.com",
       password: "T@nt3sting",
       readonly: false,
     });
-    cal = new CalendarManager(
-      cache, persist, event);
+    cal = new CalendarManager(cache, event);
     await cal.connect();
 
   });
   after(async () => {
     await cache.stop();
-    await persist.stop();
+    await db.stop();
   });
 
   describe("EWS Timeline", () => {

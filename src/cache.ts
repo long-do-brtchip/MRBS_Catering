@@ -3,6 +3,7 @@ import {
   IMeetingInfo, ITimelineEntry,
   ITimelineRequest, ITimePoint,
 } from "./calendar";
+import {Database} from "./database";
 import {log} from "./log";
 import {PanLPath} from "./path";
 import {IRoom, Persist} from "./persist";
@@ -21,9 +22,9 @@ export class Cache {
       const client = new redis();
       client.on("ready", async () => {
         client.set(Cache.SEQUENCE_KEY, 0);
-        const persist = await Persist.getInstance();
-        const config = await persist.getHubConfig();
-        await persist.stop();
+        const db = await Database.getInstance();
+        const config = await Persist.getHubConfig();
+        await db.stop();
 
         const observer = new redis();
         observer.on("ready", async () => {

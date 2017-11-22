@@ -1,9 +1,8 @@
 import {Int64LE} from "int64-buffer";
 import "reflect-metadata";
-import {Connection, createConnection} from "typeorm";
-import {Agent} from "./entity/agent";
-import {Config, ConfigType} from "./entity/config";
-import {Link} from "./entity/link";
+import {Agent} from "./entity/hub/agent";
+import {Config, ConfigType} from "./entity/hub/config";
+import {Link} from "./entity/hub/link";
 import {log} from "./log";
 
 export enum CalendarType {
@@ -44,28 +43,7 @@ export interface IRoom {
 }
 
 export class Persist {
-  public static async getInstance(): Promise<Persist> {
-    if (Persist.instance === undefined) {
-      Persist.instance = new Persist(await createConnection());
-    } else {
-      Persist.instance.addRef();
-    }
-    return Persist.instance;
-  }
-
-  private static instance: Persist | undefined;
-
-  private constructor(private conn: Connection, private refCnt = 1) { }
-
-  public async stop(): Promise<void> {
-    if (--this.refCnt === 0) {
-      log.silly("Close database connection");
-      await this.conn.close();
-      Persist.instance = undefined;
-    }
-  }
-
-  public async getAgentId(buf: Buffer): Promise<number> {
+  public static async getAgentId(buf: Buffer): Promise<number> {
     const uid = new Int64LE(buf);
     let agent = await Agent.findOne({where : {uid: uid.toString()}}) as Agent;
     if (agent !== undefined) {
@@ -78,7 +56,7 @@ export class Persist {
     }
   }
 
-  public async getCalendarConfig(): Promise<ICalendarConfig> {
+  public static async getCalendarConfig(): Promise<ICalendarConfig> {
     const v = await Config.findOne(
       {where: {id: ConfigType.CALENDAR_CONFIG}}) as Config;
 
@@ -98,7 +76,7 @@ export class Persist {
     }
   }
 
-  public async setCalendarConfig(cfg: ICalendarConfig): Promise<void> {
+  public static async setCalendarConfig(cfg: ICalendarConfig): Promise<void> {
     let v = await Config.findOne(
       {where: {id: ConfigType.CALENDAR_CONFIG}}) as Config;
     if (v === undefined) {
@@ -110,7 +88,7 @@ export class Persist {
     // TODO: Try connect to calendar, broadcast PanL changes in caller function
   }
 
-  public async addRoom(room: IRoom): Promise<void> {
+  public static async addRoom(room: IRoom): Promise<void> {
     let link = await Link.findOne({where: {address : room.address}}) as Link;
     if (link !== undefined) {
       link.name = room.name;
@@ -124,19 +102,20 @@ export class Persist {
     await link.save();
   }
 
-  public async findRoom(uuid: Buffer): Promise<IRoom | undefined> {
+  public static async findRoom(uuid: Buffer): Promise<IRoom | undefined> {
     const val = new Int64LE(uuid);
     const link = await Link.findOne({where: {uuid: val.toString()}}) as Link;
     return link === undefined ? undefined :
       {address: link.address, name: link.name};
   }
 
-  public async findRoomUuid(address: string): Promise<string | undefined> {
+  public static async findRoomUuid(address: string):
+  Promise<string | undefined> {
     const link = await Link.findOne({where: {address}}) as Link;
     return link === undefined ? undefined : link.uuid;
   }
 
-  public async linkPanL(uuid: Buffer, email: string): Promise<void> {
+  public static async linkPanL(uuid: Buffer, email: string): Promise<void> {
     const link = await Link.findOne({where: {address: email}}) as Link;
     if (link === undefined) {
       return;
@@ -145,7 +124,7 @@ export class Persist {
     await link.save();
   }
 
-  public async removePanL(uuid: Buffer): Promise<void> {
+  public static async removePanL(uuid: Buffer): Promise<void> {
     const val = new Int64LE(uuid);
     const link = await Link.findOne({where: {uuid : val.toString()}}) as Link;
     if (link !== undefined) {
@@ -153,7 +132,7 @@ export class Persist {
     }
   }
 
-  public async getHubConfig(): Promise<IHubConfig> {
+  public static async getHubConfig(): Promise<IHubConfig> {
     const v = await Config.findOne(
       {where: {id: ConfigType.HUB_CONFIG}}) as Config;
 
@@ -170,7 +149,7 @@ export class Persist {
     }
   }
 
-  public async setHubConfig(cfg: IHubConfig): Promise<void> {
+  public static async setHubConfig(cfg: IHubConfig): Promise<void> {
     let v = await Config.findOne(
       {where: {id: ConfigType.HUB_CONFIG}}) as Config;
     if (v === undefined) {
@@ -179,9 +158,5 @@ export class Persist {
     }
     v.val = JSON.stringify(cfg);
     v.save();
-  }
-
-  private addRef(): void {
-    this.refCnt++;
   }
 }

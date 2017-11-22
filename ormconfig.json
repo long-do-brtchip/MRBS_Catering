@@ -1,21 +1,21 @@
 {
    "name": "default",
    "type": "sqlite",
-   "database": "sqlitedb.db",
+   "database": "hub.db",
    "synchronize": true,
    "logging": false,
    "entities": [
-      "src/entity/**/*.ts"
+      "src/entity/hub/*.ts"
    ],
    "migrations": [
-      "src/migration/**/*.ts"
+      "src/migration/hub/*.ts"
    ],
    "subscribers": [
-      "src/subscriber/**/*.ts"
+      "src/subscriber/hub/*.ts"
    ],
    "cli": {
-      "entitiesDir": "src/entity",
-      "migrationsDir": "src/migration",
-      "subscribersDir": "src/subscriber"
+      "entitiesDir": "src/entity/hub",
+      "migrationsDir": "src/migration/hub",
+      "subscribersDir": "src/subscriber/hub"
    }
 }

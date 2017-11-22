@@ -1,42 +1,43 @@
 import {assert, expect} from "chai";
 import {v4} from "uuid";
+import {Database} from "../../src/database";
 import {Persist} from "../../src/persist";
 
 describe("Persist module", function foo() {
   this.slow(1000);
   describe("connection", () => {
     it("should be able to connect and disconnect", async () => {
-      const persist = await Persist.getInstance();
-      await persist.stop();
+      const db = await Database.getInstance();
+      await db.stop();
     });
   });
   describe("agent", () => {
     it("should be able to generate unique agent id", async () => {
-      const persist = await Persist.getInstance();
-      const id0 = await persist.getAgentId(
+      const db = await Database.getInstance();
+      const id0 = await Persist.getAgentId(
         new Buffer([0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08]));
-      const id1 = await persist.getAgentId(
+      const id1 = await Persist.getAgentId(
         new Buffer([0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08]));
-      const id2 = await persist.getAgentId(
+      const id2 = await Persist.getAgentId(
         new Buffer([0x08, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08]));
       const buf = Buffer.allocUnsafe(8);
       v4(undefined, buf, 0);
-      const id3 = await persist.getAgentId(buf);
-      await persist.stop();
+      const id3 = await Persist.getAgentId(buf);
+      await db.stop();
       expect(id0).to.equal(id1);
       expect(id1).to.not.equal(id2);
     });
   });
   describe("room and PanL", () => {
     it("should be able to add room", async () => {
-      const persist = await Persist.getInstance();
-      await persist.addRoom(
+      const db = await Database.getInstance();
+      await Persist.addRoom(
         {address: "test_room1@ftdi.local", name: "Test Room 1"});
-      await persist.addRoom(
+      await Persist.addRoom(
         {address: "test_room1@ftdi.local", name: "Test Room 1"});
-      await persist.addRoom(
+      await Persist.addRoom(
         {address: "test_room2@ftdi.local", name: "Test Room 2"});
-      await persist.stop();
+      await db.stop();
     });
 
     const fakeUUID =
@@ -44,16 +45,16 @@ describe("Persist module", function foo() {
     const panlUUID =
       new Buffer([0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08]);
     it("should be able to link room to PanL", async () => {
-      const persist = await Persist.getInstance();
-      await persist.linkPanL(panlUUID, "test_room1@ftdi.local");
-      await persist.linkPanL(panlUUID, "test_room3@ftdi.local");
-      await persist.stop();
+      const db = await Database.getInstance();
+      await Persist.linkPanL(panlUUID, "test_room1@ftdi.local");
+      await Persist.linkPanL(panlUUID, "test_room3@ftdi.local");
+      await db.stop();
     });
     it("should be able to find linked room from PanL UUID", async () => {
-      const persist = await Persist.getInstance();
-      const room = await persist.findRoom(panlUUID);
-      const noRoom = await persist.findRoom(fakeUUID);
-      await persist.stop();
+      const db = await Database.getInstance();
+      const room = await Persist.findRoom(panlUUID);
+      const noRoom = await Persist.findRoom(fakeUUID);
+      await db.stop();
       expect(noRoom).to.equal(undefined);
       expect(room).to.not.equal(undefined);
       if (room) {
@@ -62,11 +63,11 @@ describe("Persist module", function foo() {
       }
     });
     it("should be able to remove PanL", async () => {
-      const persist = await Persist.getInstance();
-      await persist.removePanL(panlUUID);
-      await persist.removePanL(fakeUUID);
-      const room = await persist.findRoom(panlUUID);
-      await persist.stop();
+      const db = await Database.getInstance();
+      await Persist.removePanL(panlUUID);
+      await Persist.removePanL(fakeUUID);
+      const room = await Persist.findRoom(panlUUID);
+      await db.stop();
       assert(room === undefined);
     });
   });

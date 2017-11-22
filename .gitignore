@@ -61,5 +61,5 @@ jspm_packages/
 dist/
 .idea
 .idea/workspace.xml
-sqlitedb.db
+*.db
 package-lock.json

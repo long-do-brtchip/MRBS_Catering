@@ -1,5 +1,6 @@
 import {EventEmitter} from "events";
 import {Cache} from "./cache";
+import {Database} from "./database";
 import {EWSCalendar} from "./ews";
 import {log} from "./log";
 import {MockupCalendar} from "./mockup";
@@ -49,12 +50,8 @@ export class CalendarManager implements ICalendarNotification {
   private calendar: ICalendar;
   private isConnected: boolean;
 
-  constructor(
-    private cache: Cache,
-    private persist: Persist,
-    private event: EventEmitter) {
-    if (this.event === undefined ||
-      this.cache === undefined || this.persist === undefined) {
+  constructor(private cache: Cache, private event: EventEmitter) {
+    if (this.event === undefined || this.cache === undefined) {
       throw(new Error("Invalid parameter"));
     }
   }
@@ -132,8 +129,11 @@ export class CalendarManager implements ICalendarNotification {
     log.info("Start Calendar Manager...");
 
     try {
-      const config = await this.persist.getCalendarConfig();
-      const configHub = await this.persist.getHubConfig();
+      const db = await Database.getInstance();
+      const [config, configHub] = await Promise.all([
+        Persist.getCalendarConfig(),
+        Persist.getHubConfig()]);
+      await db.stop();
 
       switch (config.type) {
         case CalendarType.UNCONFIGURED:
