@@ -1,4 +1,4 @@
-{
+ [{
    "name": "default",
    "type": "sqlite",
    "database": "hub.db",
@@ -18,4 +18,25 @@
       "migrationsDir": "src/migration/hub",
       "subscribersDir": "src/subscriber/hub"
    }
-}
+},
+{
+   "name": "auth",
+   "type": "sqlite",
+   "database": "auth.db",
+   "synchronize": true,
+   "logging": false,
+   "entities": [
+      "src/entity/auth/*.ts"
+   ],
+   "migrations": [
+      "src/migration/auth/*.ts"
+   ],
+   "subscribers": [
+      "src/subscriber/auth/*.ts"
+   ],
+   "cli": {
+      "entitiesDir": "src/entity/auth",
+      "migrationsDir": "src/migration/auth",
+      "subscribersDir": "src/subscriber/auth"
+   }
+}]
