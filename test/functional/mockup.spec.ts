@@ -2,12 +2,40 @@ import {assert, expect} from "chai";
 import {EventEmitter} from "events";
 import {Cache} from "../../src/cache";
 import {
-  CalendarManager, IMeetingInfo, ITimelineEntry, ITimelineRequest, ITimePoint,
+  CalendarManager, ITimePoint,
 } from "../../src/calendar";
 import {Database} from "../../src/database";
 import {PanLPath} from "../../src/path";
 import {CalendarType, Persist} from "../../src/persist";
-import {MessageParser} from "../../src/recv";
+import {ICalendarEvent} from "../../src/service";
+
+class CalendarEventConsumer implements ICalendarEvent {
+  public async onCalMgrReady(): Promise<void> {
+    return;
+  }
+
+  public async onCalMgrError(err: Error): Promise<void> {
+    return;
+  }
+
+  public async onAdd(path: PanLPath, id: ITimePoint, duration: number):
+  Promise<void> {
+    return;
+  }
+
+  public async onDelete(path: PanLPath, id: ITimePoint): Promise<void> {
+    return;
+  }
+
+  public async onUpdate(path: PanLPath, id: ITimePoint): Promise<void> {
+    return;
+  }
+
+  public async onExtend(path: PanLPath, id: ITimePoint, newDuration: number):
+  Promise<void> {
+    return;
+  }
+}
 
 describe("Mockup calendar module", () => {
   let cache: Cache;
@@ -15,6 +43,7 @@ describe("Mockup calendar module", () => {
   let db: Database;
   const evt = new EventEmitter();
   const path = new PanLPath(1, 1);
+  const consumer = new CalendarEventConsumer();
 
   before(async () => {
     db = await Database.getInstance();
@@ -25,7 +54,7 @@ describe("Mockup calendar module", () => {
       password: "",
       readonly: false});
     cache = await Cache.getInstance();
-    cal = new CalendarManager(cache, evt);
+    cal = new CalendarManager(cache, consumer);
   });
   after(async () => {
     await cache.stop();

@@ -20,8 +20,9 @@ export class Database {
 
   public async stop(): Promise<void> {
     if (--this.refCnt === 0) {
-      log.silly("Close database connection");
+      log.silly("Close database connections");
       for (const conn of this.conns) {
+        log.silly("Close connection to " + conn.name);
         await conn.close();
       }
       Database.instance = undefined;

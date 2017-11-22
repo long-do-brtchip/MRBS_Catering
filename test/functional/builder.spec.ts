@@ -1,8 +1,6 @@
-import {assert, expect, use} from "chai";
+import {expect, use} from "chai";
 import chaiAsPromised = require("chai-as-promised");
 import {MessageBuilder} from "../../src/builder";
-import {IMeetingInfo, ITimelineEntry} from "../../src/calendar";
-import {PanLPath} from "../../src/path";
 
 describe("Outgoing Message Builder module", () => {
   before(async () => {

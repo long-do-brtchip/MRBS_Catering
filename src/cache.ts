@@ -361,7 +361,7 @@ export class Cache {
   }
 
   public async setAuthSuccess(path: PanLPath, email: string): Promise<void> {
-    this.client.set(Cache.authKey(path), email, "ex", 3);
+    await this.client.set(Cache.authKey(path), email, "ex", 3);
   }
 
   public async getAuth(path: PanLPath): Promise<string> {

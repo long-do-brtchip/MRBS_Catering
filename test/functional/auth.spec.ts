@@ -1,5 +1,4 @@
-import {assert, expect} from "chai";
-import {v4} from "uuid";
+import {expect} from "chai";
 import {Auth} from "../../src/auth";
 import {Database} from "../../src/database";
 

@@ -1,17 +1,46 @@
-import {assert, expect, use} from "chai";
+import {expect, use} from "chai";
 import chaiAsPromised = require("chai-as-promised");
-import {EventEmitter} from "events";
 import {Cache} from "../../src/cache";
-import {CalendarManager} from "../../src/calendar";
+import {CalendarManager, ITimePoint} from "../../src/calendar";
 import {Database} from "../../src/database";
 import {PanLPath} from "../../src/path";
 import {CalendarType, Persist} from "../../src/persist";
+import {ICalendarEvent} from "../../src/service";
+
+class CalendarEventConsumer implements ICalendarEvent {
+  public async onCalMgrReady(): Promise<void> {
+    return;
+  }
+
+  public async onCalMgrError(err: Error): Promise<void> {
+    return;
+  }
+
+  public async onAdd(path: PanLPath, id: ITimePoint, duration: number):
+  Promise<void> {
+    return;
+  }
+
+  public async onDelete(path: PanLPath, id: ITimePoint): Promise<void> {
+    return;
+  }
+
+  public async onUpdate(path: PanLPath, id: ITimePoint): Promise<void> {
+    return;
+  }
+
+  public async onExtend(path: PanLPath, id: ITimePoint, newDuration: number):
+  Promise<void> {
+    return;
+  }
+}
 
 describe("EWS module", () => {
   let cal: CalendarManager;
   let cache: Cache;
   let db: Database;
   const path1 = new PanLPath(88, 88);
+  const consumer = new CalendarEventConsumer();
 
   before(async () => {
     use(chaiAsPromised);
@@ -24,7 +53,6 @@ describe("EWS module", () => {
     });
 
     db = await Database.getInstance();
-    const event = new EventEmitter();
 
     Persist.setCalendarConfig({
       type: CalendarType.OFFICE365,
@@ -33,7 +61,7 @@ describe("EWS module", () => {
       password: "T@nt3sting",
       readonly: false,
     });
-    cal = new CalendarManager(cache, event);
+    cal = new CalendarManager(cache, consumer);
     await cal.connect();
 
   });

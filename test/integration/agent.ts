@@ -1,10 +1,6 @@
-import {assert, expect} from "chai";
+import {expect} from "chai";
 import net = require("net");
-import ref = require("ref");
-import StructType = require("ref-struct");
 import rewire = require("rewire");
-import {Cache} from "../../src/cache";
-import {Persist} from "../../src/persist";
 import {PanLService} from "../../src/service";
 
 describe("Agent simulator", () => {
@@ -30,6 +26,7 @@ describe("Agent simulator", () => {
   it("should be able to send agent ID and receive messages", (done) => {
     const client = new net.Socket();
     client.on("data", (buf) => {
+      client.end();
       done();
     });
     client.on("error", (err) => {

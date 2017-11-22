@@ -92,7 +92,7 @@ api.route("/panl/:id/:address").get(async (req, res) => {
 
   await Persist.linkPanL(uuid, req.params.address);
   const service = await PanLService.getInstance();
-  service.emit("uuid", path, uuid);
+  await service.onReportUUID(path, uuid);
   await Promise.all([service.stop(), db.stop()]);
   return res.sendStatus(204);
 });

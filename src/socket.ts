@@ -6,24 +6,28 @@ import {log} from "./log";
 import {PanLPath} from "./path";
 import {Persist} from "./persist";
 import {MessageParser} from "./recv";
+import {IAgentEvent, IPanLEvent} from "./service";
 import {IMessageTransport, Transmit} from "./xmit";
 
 export class PanLSocketController implements IMessageTransport {
   private sockets: Map<number, net.Socket>;
   private stop: EventEmitter;
 
-  constructor(port: number, private event: EventEmitter) {
+  constructor(port: number, private agentEvt: IAgentEvent,
+              panlEvt: IPanLEvent) {
     this.sockets = new Map();
     this.stop = new EventEmitter();
     const server = net.createServer((socket) => {
       const s = socket as any;
 
-      socket.on("data", (data) => {
+      socket.on("data", async (data) => {
           if (s.parser) {
             try {
               log.silly(`Received ${data.byteLength} bytes from Agent` +
                 `${s.parser.id}: ${data.toString("hex")}`);
-              s.parser.onData(data);
+              socket.pause();
+              await s.parser.onData(data);
+              socket.resume();
             } catch (e) {
               log.debug(`Failed to parse: ${e}, close socket.`);
               socket.end();
@@ -34,7 +38,7 @@ export class PanLSocketController implements IMessageTransport {
                 Persist.getAgentId(buf).then((id) => {
                     log.info(`Agent ${buf.toString("hex")} is using id: ${id}`);
                     this.sockets.set(id, socket);
-                    s.parser = new MessageParser(this.event, id);
+                    s.parser = new MessageParser(agentEvt, panlEvt, id);
                   });
                 db.stop();
               });
@@ -49,7 +53,7 @@ export class PanLSocketController implements IMessageTransport {
         if (s.parser !== void 0) {
           log.debug("Received socket end event");
           this.sockets.delete(s.parser.id);
-          s.parser.notifyAgent("agentEnd");
+          this.agentEvt.onAgentEnd(s.parser.id);
         }
       });
 
@@ -57,14 +61,14 @@ export class PanLSocketController implements IMessageTransport {
         if (s.parser !== void 0) {
           log.debug("Received socket error event");
           this.sockets.delete(s.parser.id);
-          s.parser.notifyAgent("agentError", err);
+          this.agentEvt.onAgentError(s.parser.id, err);
         }
       });
 
       socket.on("drain", () => {
         log.silly("Received socket drain event");
         if (s.parser !== void 0) {
-          s.parser.notifyAgent("txDrain");
+          this.agentEvt.onTxDrain(s.parser.id);
         }
       });
 
@@ -83,7 +87,7 @@ export class PanLSocketController implements IMessageTransport {
           log.info(`Closing socket for agent ${id}...`);
           socket.end();
         }
-        log.info("Closing server...");
+        log.silly("Close socket");
         server.close();
       });
       log.info(`PanLController listen on port ${port}`);

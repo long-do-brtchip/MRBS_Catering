@@ -1,4 +1,3 @@
-import {EventEmitter} from "events";
 import {Cache} from "./cache";
 import {Database} from "./database";
 import {EWSCalendar} from "./ews";
@@ -6,6 +5,7 @@ import {log} from "./log";
 import {MockupCalendar} from "./mockup";
 import {PanLPath} from "./path";
 import {CalendarType, Persist} from "./persist";
+import {ICalendarEvent} from "./service";
 
 export interface ITimelineEntry {
   start: number;
@@ -40,17 +40,19 @@ export interface ICalendar {
 }
 
 export interface ICalendarNotification {
-  onExtendNotification(path: PanLPath, id: ITimePoint, duration: number): void;
-  onAddNotification(path: PanLPath, id: ITimePoint, duration: number): void;
-  onDeleteNotification(path: PanLPath, id: ITimePoint): void;
-  onUpdateNotification(path: PanLPath, id: ITimePoint): void;
+  onExtendNotification(path: PanLPath, id: ITimePoint, duration: number):
+  Promise<void>;
+  onAddNotification(path: PanLPath, id: ITimePoint, duration: number):
+  Promise<void>;
+  onDeleteNotification(path: PanLPath, id: ITimePoint): Promise<void>;
+  onUpdateNotification(path: PanLPath, id: ITimePoint): Promise<void>;
 }
 
 export class CalendarManager implements ICalendarNotification {
   private calendar: ICalendar;
   private isConnected: boolean;
 
-  constructor(private cache: Cache, private event: EventEmitter) {
+  constructor(private cache: Cache, private event: ICalendarEvent) {
     if (this.event === undefined || this.cache === undefined) {
       throw(new Error("Invalid parameter"));
     }
@@ -62,7 +64,7 @@ export class CalendarManager implements ICalendarNotification {
 
   public async getTimeline(path: PanLPath, req: ITimelineRequest):
   Promise<ITimelineEntry[]> {
-    this.cache.setDayOffset(path, req.id.dayOffset);
+    await this.cache.setDayOffset(path, req.id.dayOffset);
     let entries = await this.cache.getTimeline(path, req);
     if (entries === undefined) {
       // get timeline from External server and cached
@@ -103,26 +105,30 @@ export class CalendarManager implements ICalendarNotification {
     return this.calendar.cancelUnclaimedMeeting(path, id);
   }
 
-  public onAddNotification(path: PanLPath, id: ITimePoint, duration: number):
-  void {
-    this.cache.setTimelineEntry(path, id, duration);
-    this.event.emit("add", path, id, duration);
+  public async onAddNotification(path: PanLPath, id: ITimePoint,
+                                 duration: number): Promise<void> {
+    await this.cache.setTimelineEntry(path, id, duration);
+    await this.event.onAdd(path, id, duration);
   }
 
-  public onExtendNotification(path: PanLPath, id: ITimePoint, duration: number):
-  void {
-    this.cache.setTimelineEntry(path, id, duration);
-    this.event.emit("extend", path, id, duration);
+  public async onExtendNotification(path: PanLPath, id: ITimePoint,
+                                    duration: number): Promise<void> {
+    await this.cache.setTimelineEntry(path, id, duration);
+    await this.event.onExtend(path, id, duration);
   }
 
-  public onDeleteNotification(path: PanLPath, id: ITimePoint): void {
-    this.cache.removeTimelineEntry(path, id);
-    this.cache.removeMeetingInfo(path, id);
-    this.event.emit("delete", path, id);
+  public async onDeleteNotification(path: PanLPath, id: ITimePoint):
+  Promise<void> {
+    await Promise.all([
+      this.cache.removeTimelineEntry(path, id),
+      this.cache.removeMeetingInfo(path, id),
+    ]);
+    await this.event.onDelete(path, id);
   }
 
-  public onUpdateNotification(path: PanLPath, id: ITimePoint): void {
-    this.event.emit("update", path, id);
+  public async onUpdateNotification(path: PanLPath, id: ITimePoint):
+  Promise<void> {
+    await this.event.onUpdate(path, id);
   }
 
   public async connect(): Promise<void> {
@@ -150,11 +156,11 @@ export class CalendarManager implements ICalendarNotification {
           break;
       }
     } catch (err) {
-      this.event.emit("calMgrError", err);
+      await this.event.onCalMgrError(err);
       return;
     }
     this.isConnected = true;
-    this.event.emit("calMgrReady");
+    await this.event.onCalMgrReady();
   }
 
   public async disconnect(): Promise<void> {

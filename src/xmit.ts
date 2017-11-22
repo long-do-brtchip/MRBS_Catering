@@ -1,8 +1,7 @@
 import * as assert from "assert";
-import {EventEmitter} from "events";
 import {MessageBuilder} from "./builder";
 import {PanLPath} from "./path";
-import {Persist} from "./persist";
+import {IAgentEvent, IPanLEvent} from "./service";
 import {PanLSocketController} from "./socket";
 
 export interface IMessageTransport {
@@ -33,12 +32,12 @@ export class Transmit {
   private free: boolean;
   private tx: IMessageTransport;
 
-  constructor(private event: EventEmitter) {
-    if (this.event === undefined) {
+  constructor(agentEvt: IAgentEvent, panlEvt: IPanLEvent) {
+    if (agentEvt === undefined || panlEvt === undefined) {
       throw(new Error("Invalid parameter"));
     }
     try {
-      this.tx = new PanLSocketController(0xF7D1, event);
+      this.tx = new PanLSocketController(0xF7D1, agentEvt, panlEvt);
     } catch (e) {
       throw(new Error(`Unable to start controller, exit now.` +
         ` Err: ${e.toString()}`));

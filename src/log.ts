@@ -22,6 +22,7 @@ switch (process.env.NODE_ENV) {
         new transports.Console({colorize: true, timestamp: ts}),
       ],
     });
+    process.on("unhandledRejection", (r) => log.error(r));
 }
 
 log.verbose("Log instance created");

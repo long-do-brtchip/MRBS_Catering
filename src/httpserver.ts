@@ -2,7 +2,6 @@ import express = require("express");
 import {Server} from "http";
 import * as path from "path";
 import {api} from "./api";
-import {Link} from "./entity/hub/link";
 import {log} from "./log";
 
 export class HttpServer {

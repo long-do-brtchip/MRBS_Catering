@@ -1,7 +1,7 @@
 import {Cache} from "./cache";
 import {
-  ICalendar, ICalendarNotification, IMeetingInfo,
-  ITimelineEntry, ITimelineRequest, ITimePoint,
+  ICalendar, ICalendarNotification,
+  ITimelineEntry, ITimePoint,
 } from "./calendar";
 import {PanLPath} from "./path";
 
@@ -37,21 +37,21 @@ export class MockupCalendar implements ICalendar {
 
   public async extendMeeting(path: PanLPath, id: ITimePoint, duration: number):
   Promise<void> {
-    this.notify.onExtendNotification(path, id, duration);
+    await this.notify.onExtendNotification(path, id, duration);
   }
 
   public async endMeeting(path: PanLPath, id: ITimePoint): Promise<void> {
     const info = await this.cache.getMeetingInfo(path, id);
     info.subject = `Ended: ${info.subject}`;
     await this.cache.setMeetingInfo(path, id, info);
-    this.notify.onUpdateNotification(path, id);
+    await this.notify.onUpdateNotification(path, id);
   }
 
   public async cancelMeeting(path: PanLPath, id: ITimePoint): Promise<void> {
     const info = await this.cache.getMeetingInfo(path, id);
     info.subject = `Cancelled: ${info.subject}`;
     await this.cache.setMeetingInfo(path, id, info);
-    this.notify.onUpdateNotification(path, id);
+    await this.notify.onUpdateNotification(path, id);
   }
 
   public async cancelUnclaimedMeeting(path: PanLPath, id: ITimePoint):
@@ -59,6 +59,6 @@ export class MockupCalendar implements ICalendar {
     const info = await this.cache.getMeetingInfo(path, id);
     info.subject = `Unclaimed: ${info.subject}`;
     await this.cache.setMeetingInfo(path, id, info);
-    this.notify.onUpdateNotification(path, id);
+    await this.notify.onUpdateNotification(path, id);
   }
 }

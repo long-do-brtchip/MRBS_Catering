@@ -1,7 +1,6 @@
-import {assert, expect} from "chai";
+import {expect} from "chai";
 import ref = require("ref");
 import StructType = require("ref-struct");
-import {MessageParser} from "../../src/recv";
 
 describe("Incoming Message Parser module", () => {
   describe("parseAgentID", () => {

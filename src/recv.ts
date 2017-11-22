@@ -1,9 +1,9 @@
-import {EventEmitter} from "events";
 import ref = require("ref");
 import StructType = require("ref-struct");
-import {ITimelineRequest} from "./calendar";
+import {ITimelineRequest, ITimePoint} from "./calendar";
 import {log} from "./log";
 import {PanLPath} from "./path";
+import {IAgentEvent, IPanLEvent} from "./service";
 
 enum Incoming {
   REPORT_AGENT_ID, // 8
@@ -77,31 +77,25 @@ export class MessageParser {
   private path: PanLPath;
   private getBody = false;
 
-  constructor(private event: EventEmitter, public id: number) {
+  constructor(private agentEvt: IAgentEvent, private panlEvt: IPanLEvent,
+              public id: number) {
     log.silly(`Create MessageParser for agent ${this.id}`);
-    this.notifyAgent("agentConnected");
+    this.agentEvt.onAgentConnected(id);
   }
 
-  public notify(evt: string, ...args: any[]): void {
-    this.event.emit(evt, this.path, ...args);
-  }
-
-  public notifyAgent(evt: string, ...args: any[]): void {
-    this.event.emit(evt, this.id, ...args);
-  }
-
-  public onData(buffer: Buffer): void {
+  public async onData(buffer: Buffer): Promise<void> {
     while (buffer.byteLength) {
       const id = buffer[0];
       let next = buffer = buffer.slice(1);
 
       switch (id) {
         case Incoming.REQUEST_FIRMWARE:
-          this.notify("requestFirmware");
+          await this.panlEvt.onRequestFirmware(this.path);
           break;
         case Incoming.AUTH_BY_PASSCODE:
           next = MessageParser.verifyLength(buffer, StructAuthByPasscode.size);
-          this.notify("passcode", StructAuthByPasscode(buffer).passcode);
+          await this.panlEvt.onPasscode(this.path,
+            StructAuthByPasscode(buffer).passcode);
           break;
         case Incoming.AUTH_BY_RFID:
           throw new Error("Method not implemented.");
@@ -111,17 +105,17 @@ export class MessageParser {
           break;
         case Incoming.REPORT_UUID:
           next = MessageParser.verifyLength(buffer, 8);
-          this.notify("uuid", buffer.slice(0, 8));
+          this.panlEvt.onReportUUID(this.path, buffer.slice(0, 8));
           break;
         case Incoming.REPORT_DEVICE_CHANGE:
-          this.notifyAgent("deviceChange");
+          await this.agentEvt.onDeviceChange(this.id);
           break;
         case Incoming.REPORT_PANL_STATUS:
           next = MessageParser.verifyLength(buffer, 1);
-          this.notify("status", buffer[0]);
+          await this.panlEvt.onStatus(this.path, buffer[0]);
           break;
         case Incoming.GET_LOCAL_TIME:
-          this.notify("gettime");
+          this.panlEvt.onGetTime(this.path);
           break;
         case Incoming.GET_TIMELINE: {
           next = MessageParser.verifyLength(buffer, StructTimeline.size);
@@ -131,7 +125,7 @@ export class MessageParser {
             lookForward: tl.time >= 0,
             maxCount: tl.count,
           };
-          this.notify("getTimeline", req);
+          await this.panlEvt.onGetTimeline(this.path, req);
           break;
         }
         case Incoming.GET_MEETING_BODY:
@@ -139,7 +133,7 @@ export class MessageParser {
           break;
         case Incoming.GET_MEETING_INFO: {
           next = MessageParser.verifyLength(buffer, StructGetMeetingInfo.size);
-          this.notify("getMeetingInfo",
+          this.panlEvt.onGetMeetingInfo(this.path,
             StructGetMeetingInfo(buffer).minutes, this.getBody);
           this.getBody = false;
           break;
@@ -147,34 +141,51 @@ export class MessageParser {
         case Incoming.EXTEND_MEETING: {
           next = MessageParser.verifyLength(buffer, StructTimespan.size);
           const span = StructTimespan(buffer);
-          this.notify("extendMeeting", span.dayOffset, span.minutesOfDay,
-            span.duration);
+          const point: ITimePoint = {
+            dayOffset: span.dayOffset,
+            minutesOfDay: span.minutesOfDay,
+          };
+          await this.panlEvt.onExtendMeeting(this.path, point, span.duration);
           break;
         }
         case Incoming.CREATE_BOOKING: {
           next = MessageParser.verifyLength(buffer, StructTimespan.size);
           const span = StructTimespan(buffer);
-          this.notify("createBooking", span.dayOffset, span.minutesOfDay,
-            span.duration);
+          const point: ITimePoint = {
+            dayOffset: span.dayOffset,
+            minutesOfDay: span.minutesOfDay,
+          };
+          await this.panlEvt.onCreateBooking(this.path, point, span.duration);
           break;
         }
         case Incoming.CANCEL_MEETING: {
           next = MessageParser.verifyLength(buffer, StructTime.size);
           const when = StructTime(buffer);
-          this.notify("cancelMeeting", when.dayOffset, when.minutesOfDay);
+          const point: ITimePoint = {
+            dayOffset: when.dayOffset,
+            minutesOfDay: when.minutesOfDay,
+          };
+          await this.panlEvt.onCancelMeeting(this.path, point);
           break;
         }
         case Incoming.END_MEETING: {
           next = MessageParser.verifyLength(buffer, StructTime.size);
           const when = StructTime(buffer);
-          this.notify("endMeeting", when.dayOffset, when.minutesOfDay);
+          const point: ITimePoint = {
+            dayOffset: when.dayOffset,
+            minutesOfDay: when.minutesOfDay,
+          };
+          await this.panlEvt.onEndMeeting(this.path, point);
           break;
         }
         case Incoming.CANCEL_UNCLAIM_MEETING: {
           next = MessageParser.verifyLength(buffer, StructTime.size);
           const when = StructTime(buffer);
-          this.notify("cancelUnclaimedMeeting", when.dayOffset,
-            when.minutesOfDay);
+          const point: ITimePoint = {
+            dayOffset: when.dayOffset,
+            minutesOfDay: when.minutesOfDay,
+          };
+          await this.panlEvt.onCancelUnclaimedMeeting(this.path, point);
           break;
         }
         default:
