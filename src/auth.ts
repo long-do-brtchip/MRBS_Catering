@@ -11,4 +11,12 @@ export class Auth {
     await employee.save();
     return employee.id;
   }
+
+  public static async authByPasscode(code: number): Promise<string> {
+    return code === 0x666666 ? "passcode@test.com" : "";
+  }
+
+  public static async authByRFID(epc: Buffer): Promise<string> {
+    return "rfid@test.com";
+  }
 }

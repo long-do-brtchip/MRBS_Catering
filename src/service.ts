@@ -1,5 +1,6 @@
 import {EventEmitter} from "events";
-import {MessageBuilder} from "./builder";
+import {Auth} from "./auth";
+import {ErrorCode, MessageBuilder} from "./builder";
 import {Cache} from "./cache";
 import {
   CalendarManager, IMeetingInfo, ITimelineEntry, ITimelineRequest, ITimePoint,
@@ -49,7 +50,7 @@ export class PanLService extends EventEmitter {
     this.on("status", this.onStatus);
     this.on("gettime", this.onGetTime);
     this.on("requestFirmware", this.onRequestFirmware);
-    this.on("auth", this.onAuth);
+    this.on("passcode", this.onPasscode);
     this.on("getTimeline", this.onGetTimeline);
     this.on("getMeetingInfo", this.onGetMeetingInfo);
     this.on("extendMeeting", this.onExtendMeeting);
@@ -140,8 +141,15 @@ export class PanLService extends EventEmitter {
     log.error("TODO: Method onRequestFirmware not implemented.");
   }
 
-  private onAuth(path: PanLPath, code: number): void {
-    log.error("TODO: Method onAuth not implemented.");
+  private async onPasscode(path: PanLPath, code: number): Promise<void> {
+    const email = await Auth.authByPasscode(code);
+
+    if (email.length === 0) {
+      const msg = [MessageBuilder.buildErrorCode(ErrorCode.ERROR_AUTH_ERROR)];
+      this.tx.send(path, msg);
+      return;
+    }
+    PanLService.cache.setAuthSuccess(path, email);
   }
 
   private async onGetTimeline(
@@ -171,8 +179,12 @@ export class PanLService extends EventEmitter {
     }
   }
 
-  private onCreateBooking(path: PanLPath, id: ITimePoint, duration: number):
-  void {
+  private async onCreateBooking(path: PanLPath, id: ITimePoint,
+                                duration: number): Promise<void> {
+    const email = await PanLService.cache.getAuth(path);
+    if (email.length === 0) {
+      return;
+    }
     try {
       this.cal.createBooking(path, id, duration);
     } catch (err) {
@@ -180,8 +192,12 @@ export class PanLService extends EventEmitter {
     }
   }
 
-  private onExtendMeeting(path: PanLPath, id: ITimePoint, duration: number):
-  void {
+  private async onExtendMeeting(path: PanLPath, id: ITimePoint,
+                                duration: number): Promise<void> {
+    const email = await PanLService.cache.getAuth(path);
+    if (email.length === 0) {
+      return;
+    }
     try {
       this.cal.extendMeeting(path, id, duration);
     } catch (err) {
@@ -208,7 +224,12 @@ export class PanLService extends EventEmitter {
     }
   }
 
-  private onCancelMeeting(path: PanLPath, id: ITimePoint): void {
+  private async onCancelMeeting(path: PanLPath, id: ITimePoint):
+  Promise<void> {
+    const email = await PanLService.cache.getAuth(path);
+    if (email.length === 0) {
+      return;
+    }
     try {
       this.cal.cancelMeeting(path, id);
     } catch (err) {

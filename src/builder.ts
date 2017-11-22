@@ -2,6 +2,11 @@ import ref = require("ref");
 import StructType = require("ref-struct");
 import {IMeetingInfo, ITimelineEntry, ITimePoint} from "./calendar";
 
+export enum ErrorCode {
+  ERROR_SUCCESS,
+  ERROR_AUTH_ERROR,
+}
+
 enum Outgoing {
   SET_ADDRESS,
   SET_POWER_OFF,
@@ -175,7 +180,7 @@ const StructSetMeetingBodyHdr = StructType({
 
 const StructSetErrorCode = StructType({
   cmd: ref.types.uint8,
-  err: ref.types.uint8,
+  id: ref.types.uint8,
 }, {packed: true});
 
 export class MessageBuilder {
@@ -314,6 +319,13 @@ export class MessageBuilder {
       cmd: Outgoing.ON_UPDATE_MEETING,
       dayOffset: id.dayOffset,
       minutesOfDay: id.minutesOfDay,
+    }).ref();
+  }
+
+  public static buildErrorCode(id: ErrorCode): Buffer {
+    return new StructSetErrorCode({
+      cmd: Outgoing.SET_ERROR_CODE,
+      id,
     }).ref();
   }
 }

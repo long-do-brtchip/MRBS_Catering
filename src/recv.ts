@@ -101,7 +101,7 @@ export class MessageParser {
           break;
         case Incoming.AUTH_BY_PASSCODE:
           next = MessageParser.verifyLength(buffer, StructAuthByPasscode.size);
-          this.notify("auth", StructAuthByPasscode(buffer).passcode);
+          this.notify("passcode", StructAuthByPasscode(buffer).passcode);
           break;
         case Incoming.AUTH_BY_RFID:
           throw new Error("Method not implemented.");

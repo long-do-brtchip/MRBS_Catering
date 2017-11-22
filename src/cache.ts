@@ -79,6 +79,10 @@ export class Cache {
     return `day_offset:${path.uid}`;
   }
 
+  private static authKey(path: PanLPath): string {
+    return `auth:${path}`;
+  }
+
   private static hashMeetingKeyByTimePoint(path: PanLPath, id: ITimePoint):
   string {
     const dateStr = Time.dayOffsetToString(id.dayOffset);
@@ -354,6 +358,21 @@ export class Cache {
 
   public setExpiry(val: number): void {
     this.expiry = val;
+  }
+
+  public async setAuthSuccess(path: PanLPath, email: string): Promise<void> {
+    this.client.set(Cache.authKey(path), email, "ex", 3);
+  }
+
+  public async getAuth(path: PanLPath): Promise<string> {
+    const key = Cache.authKey(path);
+    if (await this.client.exists(key)) {
+      const email = await this.client.get(key);
+      await this.client.del(key);
+      return email;
+    } else {
+      return "";
+    }
   }
 
   private scan(pattern: string): Promise<string[]> {
