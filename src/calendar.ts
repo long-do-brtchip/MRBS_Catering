@@ -113,21 +113,21 @@ export class CalendarManager implements ICalendarNotification {
 
   public async onExtendNotification(path: PanLPath, id: ITimePoint,
                                     duration: number): Promise<void> {
+    // Start time no change
     await this.cache.setTimelineEntry(path, id, duration);
     await this.event.onExtend(path, id, duration);
   }
 
   public async onDeleteNotification(path: PanLPath, id: ITimePoint):
   Promise<void> {
-    await Promise.all([
-      this.cache.removeTimelineEntry(path, id),
-      this.cache.removeMeetingInfo(path, id),
-    ]);
+    // Call onDeleteNotification and onAddNotification if start time changed
+    await this.cache.removeTimelineEntry(path, id);
     await this.event.onDelete(path, id);
   }
 
   public async onUpdateNotification(path: PanLPath, id: ITimePoint):
   Promise<void> {
+    // Start and end time no change
     await this.event.onUpdate(path, id);
   }
 

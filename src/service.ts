@@ -185,10 +185,6 @@ export class PanLService implements IAgentEvent, IPanLEvent, ICalendarEvent {
 
   public async onCreateBooking(path: PanLPath, id: ITimePoint,
                                duration: number): Promise<void> {
-    const email = await PanLService.cache.getAuth(path);
-    if (email.length === 0) {
-      return;
-    }
     try {
       await this.cal.createBooking(path, id, duration);
     } catch (err) {
@@ -198,10 +194,6 @@ export class PanLService implements IAgentEvent, IPanLEvent, ICalendarEvent {
 
   public async onExtendMeeting(path: PanLPath, id: ITimePoint,
                                duration: number): Promise<void> {
-    const email = await PanLService.cache.getAuth(path);
-    if (email.length === 0) {
-      return;
-    }
     try {
       await this.cal.extendMeeting(path, id, duration);
     } catch (err) {
@@ -232,10 +224,6 @@ export class PanLService implements IAgentEvent, IPanLEvent, ICalendarEvent {
 
   public async onCancelMeeting(path: PanLPath, id: ITimePoint):
   Promise<void> {
-    const email = await PanLService.cache.getAuth(path);
-    if (email.length === 0) {
-      return;
-    }
     try {
       await this.cal.cancelMeeting(path, id);
     } catch (err) {

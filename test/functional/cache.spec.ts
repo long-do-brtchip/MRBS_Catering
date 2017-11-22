@@ -453,6 +453,22 @@ describe("Cache module", () => {
         .to.be.rejectedWith("Meeting Id not found");
     }).timeout(5000);
   });
+  describe("Attendee", () => {
+    it("should be able to set and validate", async () => {
+      const point = {dayOffset: 0, minutesOfDay: 10};
+      const path = new PanLPath(1, 1);
+      await cache.setMeetingAttendees(path, point, ["1@1.com", "2@1.com"]);
+      const ret = await cache.validateAttendee(path, point, "2@1.com");
+      expect(ret).to.deep.equal(true);
+    });
+    it("should be deleted once timeline entry removed", async () => {
+      const point = {dayOffset: 0, minutesOfDay: 10};
+      const path = new PanLPath(1, 1);
+      await cache.removeTimelineEntry(path, point);
+      const ret = await cache.validateAttendee(path, point, "2@1.com");
+      expect(ret).to.deep.equal(false);
+    });
+  });
   describe("Day Offset", () => {
     it("should be able to setDayOffset");
     it("should be able to getDayOffset");
