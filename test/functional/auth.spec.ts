@@ -5,7 +5,7 @@ import {Database} from "../../src/database";
 describe("Auth module", function foo() {
   this.slow(1000);
   describe("employee", () => {
-    it.only("should be able to add employee", async () => {
+    it("should be able to add employee", async () => {
       const name = "User";
       const db = await Database.getInstance();
       const id = await Auth.addEmployee(name, "user@test.com");
