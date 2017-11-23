@@ -206,7 +206,7 @@ export class CalendarManager implements ICalendarNotification {
         case CalendarType.GOOGLE:
           throw new Error("Method not implemented.");
         case CalendarType.MOCKUP:
-          this.calendar = new MockupCalendar(this, this.cache);
+          this.calendar = new MockupCalendar(this, this.cache, this.hubConfig);
           break;
       }
     } catch (err) {
