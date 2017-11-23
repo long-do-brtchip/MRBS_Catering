@@ -1,16 +1,13 @@
 import {IsEmail} from "class-validator";
 import {BaseEntity, Column, Entity,
-        Index, PrimaryGeneratedColumn} from "typeorm";
+        Index, PrimaryColumn} from "typeorm";
 
 @Entity()
 export class Employee extends BaseEntity {
-  @PrimaryGeneratedColumn()
-  public id: number;
+  @PrimaryColumn()
+  @IsEmail()
+  public email: string;
 
   @Column()
   public name: string;
-
-  @Column()
-  @IsEmail()
-  public email: string;
 }

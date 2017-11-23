@@ -4,12 +4,16 @@ import {log} from "./log";
 
 export class Auth {
   public static async addEmployee(name: string, email: string):
-  Promise<number> {
+  Promise<void> {
     const employee = new Employee();
     employee.name = name;
     employee.email = email;
     await employee.save();
-    return employee.id;
+  }
+
+  public static async getEmployeeName(email: string): Promise<string> {
+    const employee = await Employee.findOne({where: {email}}) as Employee;
+    return employee.name;
   }
 
   public static async authByPasscode(code: number): Promise<string> {
