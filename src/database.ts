@@ -17,9 +17,7 @@ export class Database {
       Employee.useConnection(conn);
       PassCode.useConnection(conn);
       Rfid.useConnection(conn);
-      this.repoPassCode = conn.getRepository(PassCode);
-      this.repoRfid = conn.getRepository(Rfid);
-      } else {
+    } else {
       Database.instance.addRef();
     }
     return Database.instance;
