@@ -1,5 +1,7 @@
 import {Connection, createConnections, getConnection} from "typeorm";
 import {Employee} from "./entity/auth/employee";
+import {PassCode} from "./entity/auth/passcode";
+import {Rfid} from "./entity/auth/rfid";
 import {log} from "./log";
 
 export class Database {
@@ -9,6 +11,8 @@ export class Database {
       Database.instance = new Database(await createConnections());
       const conn = getConnection("auth");
       Employee.useConnection(conn);
+      PassCode.useConnection(conn);
+      Rfid.useConnection(conn);
     } else {
       Database.instance.addRef();
     }
