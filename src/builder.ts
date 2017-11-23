@@ -1,6 +1,7 @@
 import ref = require("ref");
 import StructType = require("ref-struct");
 import {IMeetingInfo, ITimelineEntry, ITimePoint} from "./calendar";
+import {IHubConfig, IPanlConfig} from "./persist";
 
 export enum ErrorCode {
   ERROR_SUCCESS,
@@ -86,7 +87,10 @@ const StructSetRoomEquipments = StructType({
 
 const StructAccessRight = StructType({
   cmd: ref.types.uint8,
-  bitmap: ref.types.uint8,
+  featureDisabled: ref.types.uint8,
+  requireAuthentication : ref.types.uint8,
+  authAllowPasscode : ref.types.uint8,
+  authAllowRFID : ref.types.uint8,
 }, {packed: true});
 
 const StructHardwareFeature = StructType({
@@ -330,5 +334,28 @@ export class MessageBuilder {
       cmd: Outgoing.SET_ERROR_CODE,
       id,
     }).ref();
+  }
+
+  public static buildAccessRight(hub: IHubConfig, panl: IPanlConfig): Buffer {
+    return new StructAccessRight({
+      cmd: Outgoing.SET_ACCESS_RIGHT,
+      featureDisabled: MessageBuilder.convertBitArray(hub.featureDisabled),
+      requireAuthentication: MessageBuilder.convertBitArray(
+        hub.requireAuthentication),
+      authAllowPasscode: MessageBuilder.convertBitArray(panl.authAllowPasscode),
+      authAllowRFID: MessageBuilder.convertBitArray(panl.authAllowRFID),
+    }).ref();
+  }
+
+  private static convertBitArray<T>(obj: any): number {
+    let i = 0;
+    let val = 0;
+    for (const key of Object.keys(obj)) {
+      if (obj[key]) {
+        val += 1 << i;
+      }
+      i++;
+    }
+    return val;
   }
 }

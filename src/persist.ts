@@ -145,7 +145,7 @@ export class Persist {
   }
 
   public static async getPanlConfig(): Promise<IPanlConfig> {
-    return Persist.getConfig<IPanlConfig>(ConfigType.CALENDAR_CONFIG, {
+    return Persist.getConfig<IPanlConfig>(ConfigType.PANL_CONFIG, {
       timeout: 10,
       authAllowPasscode: {
         extendMeeting: true,

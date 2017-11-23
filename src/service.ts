@@ -284,6 +284,10 @@ export class PanLService implements IAgentEvent, IPanLEvent, ICalendarEvent {
   }
 
   public async onAgentConnected(agent: number): Promise<void> {
+    const [hub, panl] = await Promise.all([
+      Persist.getHubConfig(),
+      Persist.getPanlConfig(),
+    ]);
     const msgs = [
       MessageBuilder.buildExpectedFirmwareVersion(),
       MessageBuilder.buildUUID(),
@@ -291,6 +295,7 @@ export class PanLService implements IAgentEvent, IPanLEvent, ICalendarEvent {
       MessageBuilder.buildTimeFormat(),
       // Build SetTime at last to minimize the latency
       MessageBuilder.buildTime(),
+      MessageBuilder.buildAccessRight(hub, panl),
     ];
     /* Broadcast init settings to single agent */
     try {
