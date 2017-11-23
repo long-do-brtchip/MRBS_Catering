@@ -1,10 +1,11 @@
+import {ErrorCode} from "./builder";
 import {Cache} from "./cache";
 import {Database} from "./database";
 import {EWSCalendar} from "./ews";
 import {log} from "./log";
 import {MockupCalendar} from "./mockup";
 import {PanLPath} from "./path";
-import {CalendarType, Persist} from "./persist";
+import {CalendarType, IHubConfig, Persist} from "./persist";
 import {ICalendarEvent} from "./service";
 
 export interface ITimelineEntry {
@@ -30,30 +31,33 @@ export interface ITimelineRequest {
 
 export interface ICalendar {
   getTimeline(path: PanLPath, dayOffset: number): Promise<boolean>;
-  createBooking(path: PanLPath, id: ITimePoint, duration: number):
-    Promise<void>;
-  extendMeeting(path: PanLPath, id: ITimePoint, duration: number):
-    Promise<void>;
-  endMeeting(path: PanLPath, id: ITimePoint): Promise<void>;
-  cancelMeeting(path: PanLPath, id: ITimePoint): Promise<void>;
-  cancelUnclaimedMeeting(path: PanLPath, id: ITimePoint): Promise<void>;
+  createBooking(path: PanLPath, id: ITimePoint, duration: number,
+                email: string): Promise<ErrorCode>;
+  extendMeeting(path: PanLPath, id: ITimePoint, duration: number,
+                email: string): Promise<ErrorCode>;
+  endMeeting(path: PanLPath, id: ITimePoint, email: string): Promise<ErrorCode>;
+  cancelMeeting(path: PanLPath, id: ITimePoint, email: string):
+  Promise<ErrorCode>;
+  cancelUnclaimedMeeting(path: PanLPath, id: ITimePoint): Promise<ErrorCode>;
 }
 
 export interface ICalendarNotification {
-  onExtendNotification(path: PanLPath, id: ITimePoint, duration: number):
+  onEndTimeChangeNofication(path: PanLPath, id: ITimePoint, duration: number):
   Promise<void>;
   onAddNotification(path: PanLPath, id: ITimePoint, duration: number):
   Promise<void>;
   onDeleteNotification(path: PanLPath, id: ITimePoint): Promise<void>;
-  onUpdateNotification(path: PanLPath, id: ITimePoint): Promise<void>;
+  onMeetingUpdateNotification(path: PanLPath, id: ITimePoint): Promise<void>;
 }
 
 export class CalendarManager implements ICalendarNotification {
   private calendar: ICalendar;
   private isConnected: boolean;
 
-  constructor(private cache: Cache, private event: ICalendarEvent) {
-    if (this.event === undefined || this.cache === undefined) {
+  constructor(private cache: Cache, private event: ICalendarEvent,
+              private hubConfig: IHubConfig) {
+    if (this.event === undefined || this.cache === undefined ||
+        hubConfig === undefined) {
       throw(new Error("Invalid parameter"));
     }
   }
@@ -83,25 +87,76 @@ export class CalendarManager implements ICalendarNotification {
     return this.cache.getMeetingInfo(path, id);
   }
 
-  public createBooking(path: PanLPath, id: ITimePoint, duration: number):
-  Promise<void> {
-    return this.calendar.createBooking(path, id, duration);
+  public async createBooking(path: PanLPath, id: ITimePoint, duration: number):
+  Promise<ErrorCode> {
+    if (this.hubConfig.featureDisabled.onSpotBooking) {
+      return ErrorCode.ERROR_FEATURE_DISABLED;
+    }
+    const email = await this.cache.getAuth(path);
+    if (this.hubConfig.requireAuthentication.onSpotBooking &&
+        email.length === 0) {
+      return ErrorCode.ERROR_AUTH_ERROR;
+    }
+    return this.calendar.createBooking(path, id, duration, email);
   }
 
-  public extendMeeting(path: PanLPath, id: ITimePoint, duration: number):
-  Promise<void> {
-    return this.calendar.extendMeeting(path, id, duration);
+  public async extendMeeting(path: PanLPath, id: ITimePoint, duration: number):
+  Promise<ErrorCode> {
+    if (this.hubConfig.featureDisabled.extendMeeting) {
+      return ErrorCode.ERROR_FEATURE_DISABLED;
+    }
+    const email = await this.cache.getAuth(path);
+    if (this.hubConfig.requireAuthentication.extendMeeting) {
+      if (!await this.cache.validateAttendee(path, id, email)) {
+        return ErrorCode.ERROR_AUTH_ERROR;
+      }
+    }
+    return this.calendar.extendMeeting(path, id, duration, email);
   }
 
-  public endMeeting(path: PanLPath, id: ITimePoint): Promise<void> {
-    return this.calendar.endMeeting(path, id);
+  public async endMeeting(path: PanLPath, id: ITimePoint): Promise<ErrorCode> {
+    if (this.hubConfig.featureDisabled.endMeeting) {
+      return ErrorCode.ERROR_FEATURE_DISABLED;
+    }
+    const email = await this.cache.getAuth(path);
+    if (this.hubConfig.requireAuthentication.endMeeting) {
+      if (!await this.cache.validateAttendee(path, id, email)) {
+        return ErrorCode.ERROR_AUTH_ERROR;
+      }
+    }
+    return this.calendar.endMeeting(path, id, email);
   }
 
-  public cancelMeeting(path: PanLPath, id: ITimePoint): Promise<void> {
-    return this.calendar.cancelMeeting(path, id);
+  public async cancelMeeting(path: PanLPath, id: ITimePoint):
+  Promise<ErrorCode> {
+    if (this.hubConfig.featureDisabled.cancelMeeting) {
+      return ErrorCode.ERROR_FEATURE_DISABLED;
+    }
+    const email = await this.cache.getAuth(path);
+    if (this.hubConfig.requireAuthentication.cancelMeeting) {
+      if (!await this.cache.validateAttendee(path, id, email)) {
+        return ErrorCode.ERROR_AUTH_ERROR;
+      }
+    }
+    return this.calendar.cancelMeeting(path, id, email);
   }
 
-  public cancelUnclaimedMeeting(path: PanLPath, id: ITimePoint): Promise<void> {
+  public async checkClaimMeeting(path: PanLPath, id: ITimePoint):
+  Promise<ErrorCode> {
+    if (this.hubConfig.featureDisabled.claimMeeting) {
+      return ErrorCode.ERROR_FEATURE_DISABLED;
+    }
+    if (this.hubConfig.requireAuthentication.claimMeeting) {
+      if (!await this.cache.validateAttendee(path, id,
+        await this.cache.getAuth(path))) {
+        return ErrorCode.ERROR_AUTH_ERROR;
+      }
+    }
+    return ErrorCode.ERROR_SUCCESS;
+  }
+
+  public cancelUnclaimedMeeting(path: PanLPath, id: ITimePoint):
+  Promise<ErrorCode> {
     return this.calendar.cancelUnclaimedMeeting(path, id);
   }
 
@@ -111,8 +166,8 @@ export class CalendarManager implements ICalendarNotification {
     await this.event.onAdd(path, id, duration);
   }
 
-  public async onExtendNotification(path: PanLPath, id: ITimePoint,
-                                    duration: number): Promise<void> {
+  public async onEndTimeChangeNofication(
+    path: PanLPath, id: ITimePoint, duration: number): Promise<void> {
     // Start time no change
     await this.cache.setTimelineEntry(path, id, duration);
     await this.event.onExtend(path, id, duration);
@@ -125,7 +180,7 @@ export class CalendarManager implements ICalendarNotification {
     await this.event.onDelete(path, id);
   }
 
-  public async onUpdateNotification(path: PanLPath, id: ITimePoint):
+  public async onMeetingUpdateNotification(path: PanLPath, id: ITimePoint):
   Promise<void> {
     // Start and end time no change
     await this.event.onUpdate(path, id);
@@ -136,9 +191,7 @@ export class CalendarManager implements ICalendarNotification {
 
     try {
       const db = await Database.getInstance();
-      const [config, configHub] = await Promise.all([
-        Persist.getCalendarConfig(),
-        Persist.getHubConfig()]);
+      const config = await Persist.getCalendarConfig();
       await db.stop();
 
       switch (config.type) {
@@ -147,7 +200,8 @@ export class CalendarManager implements ICalendarNotification {
           return;
         case CalendarType.EXCHANGE:
         case CalendarType.OFFICE365:
-          this.calendar = new EWSCalendar(this, this.cache, config, configHub);
+          this.calendar = new EWSCalendar(this, this.cache, config,
+                                          this.hubConfig);
           break;
         case CalendarType.GOOGLE:
           throw new Error("Method not implemented.");

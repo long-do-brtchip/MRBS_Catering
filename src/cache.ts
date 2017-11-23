@@ -21,6 +21,7 @@ export class Cache {
     return new Promise<Cache>((resolve, reject) => {
       const client = new redis();
       client.on("ready", async () => {
+        log.verbose("Redis connection creted");
         client.set(Cache.SEQUENCE_KEY, 0);
         const db = await Database.getInstance();
         const config = await Persist.getHubConfig();

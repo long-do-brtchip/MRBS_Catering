@@ -5,6 +5,9 @@ import {IMeetingInfo, ITimelineEntry, ITimePoint} from "./calendar";
 export enum ErrorCode {
   ERROR_SUCCESS,
   ERROR_AUTH_ERROR,
+  ERROR_FEATURE_DISABLED,
+  ERROR_CERTIFICATE,
+  ERROR_NETWORK,
 }
 
 enum Outgoing {

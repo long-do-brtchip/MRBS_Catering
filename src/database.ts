@@ -5,6 +5,7 @@ import {log} from "./log";
 export class Database {
   public static async getInstance(): Promise<Database> {
     if (Database.instance === undefined) {
+      log.verbose("Database connections created");
       Database.instance = new Database(await createConnections());
       const conn = getConnection("auth");
       Employee.useConnection(conn);

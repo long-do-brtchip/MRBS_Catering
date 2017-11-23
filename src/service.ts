@@ -5,7 +5,7 @@ import {CalendarManager, ITimelineRequest, ITimePoint} from "./calendar";
 import {Database} from "./database";
 import {log} from "./log";
 import {PanLPath} from "./path";
-import {Persist} from "./persist";
+import {IHubConfig, Persist} from "./persist";
 import {Transmit} from "./xmit";
 
 export interface IAgentEvent {
@@ -32,6 +32,7 @@ export interface IPanLEvent {
   onCancelUnclaimedMeeting(path: PanLPath, id: ITimePoint): Promise<void>;
   onEndMeeting(path: PanLPath, id: ITimePoint): Promise<void>;
   onCancelMeeting(path: PanLPath, id: ITimePoint): Promise<void>;
+  onCheckClaimMeeting(path: PanLPath, id: ITimePoint): Promise<void>;
 }
 
 export interface ICalendarEvent {
@@ -46,9 +47,9 @@ export interface ICalendarEvent {
 export class PanLService implements IAgentEvent, IPanLEvent, ICalendarEvent {
   public static async getInstance(): Promise<PanLService> {
     if (PanLService.instance === undefined) {
-      PanLService.cache = await Cache.getInstance();
       PanLService.db = await Database.getInstance();
-      PanLService.instance = new PanLService();
+      PanLService.cache = await Cache.getInstance();
+      PanLService.instance = new PanLService(await Persist.getHubConfig());
     } else {
       PanLService.instance.addRef();
     }
@@ -67,9 +68,9 @@ export class PanLService implements IAgentEvent, IPanLEvent, ICalendarEvent {
   private tx: Transmit;
   private cal: CalendarManager;
 
-  private constructor(private refCnt = 1) {
+  private constructor(private hub: IHubConfig, private refCnt = 1) {
     this.tx = new Transmit(this, this);
-    this.cal = new CalendarManager(PanLService.cache, this);
+    this.cal = new CalendarManager(PanLService.cache, this, hub);
     this.cal.connect();
   }
 
@@ -77,8 +78,8 @@ export class PanLService implements IAgentEvent, IPanLEvent, ICalendarEvent {
     if (--this.refCnt === 0) {
       this.tx.stop();
       await this.cal.disconnect();
-      await PanLService.db.stop();
       await PanLService.cache.stop();
+      await PanLService.db.stop();
       PanLService.instance = undefined;
     }
   }
@@ -186,7 +187,8 @@ export class PanLService implements IAgentEvent, IPanLEvent, ICalendarEvent {
   public async onCreateBooking(path: PanLPath, id: ITimePoint,
                                duration: number): Promise<void> {
     try {
-      await this.cal.createBooking(path, id, duration);
+      this.tx.send(path, [MessageBuilder.buildErrorCode(
+        await this.cal.createBooking(path, id, duration))]);
     } catch (err) {
       log.warn(`Create booking failed for ${path}: ${err}`);
     }
@@ -195,7 +197,8 @@ export class PanLService implements IAgentEvent, IPanLEvent, ICalendarEvent {
   public async onExtendMeeting(path: PanLPath, id: ITimePoint,
                                duration: number): Promise<void> {
     try {
-      await this.cal.extendMeeting(path, id, duration);
+      this.tx.send(path, [MessageBuilder.buildErrorCode(
+        await this.cal.extendMeeting(path, id, duration))]);
     } catch (err) {
       log.warn(`Extend meeting failed for ${path}: ${err}`);
     }
@@ -207,7 +210,8 @@ export class PanLService implements IAgentEvent, IPanLEvent, ICalendarEvent {
       log.error(`Invalid sender from agent ${path.agent}.`);
     }
     try {
-      await this.cal.cancelUnclaimedMeeting(path, id);
+      this.tx.send(path, [MessageBuilder.buildErrorCode(
+        await this.cal.cancelUnclaimedMeeting(path, id))]);
     } catch (err) {
       log.warn(`Cancel unclaimed meeting failed for ${path}: ${err}`);
     }
@@ -216,7 +220,8 @@ export class PanLService implements IAgentEvent, IPanLEvent, ICalendarEvent {
   public async onEndMeeting(path: PanLPath, id: ITimePoint):
   Promise<void> {
     try {
-      await this.cal.endMeeting(path, id);
+      this.tx.send(path, [MessageBuilder.buildErrorCode(
+        await this.cal.endMeeting(path, id))]);
     } catch (err) {
       log.warn(`End meeting failed for ${path}: ${err}`);
     }
@@ -225,9 +230,20 @@ export class PanLService implements IAgentEvent, IPanLEvent, ICalendarEvent {
   public async onCancelMeeting(path: PanLPath, id: ITimePoint):
   Promise<void> {
     try {
-      await this.cal.cancelMeeting(path, id);
+      this.tx.send(path, [MessageBuilder.buildErrorCode(
+        await this.cal.cancelMeeting(path, id))]);
     } catch (err) {
       log.warn(`Cancel meeting failed for ${path}: ${err}`);
+    }
+  }
+
+  public async onCheckClaimMeeting(path: PanLPath, id: ITimePoint):
+  Promise<void> {
+    try {
+      this.tx.send(path, [MessageBuilder.buildErrorCode(
+        await this.cal.checkClaimMeeting(path, id))]);
+    } catch (err) {
+      log.warn(`Claim meeting failed for ${path}: ${err}`);
     }
   }
 

@@ -23,6 +23,7 @@ enum Incoming {
   END_MEETING, // 2
   CANCEL_UNCLAIM_MEETING, // 2
   CREATE_BOOKING, // 4
+  CHECK_CLAIM_MEETING,
 }
 
 const StructAuthByPasscode = StructType({
@@ -186,6 +187,16 @@ export class MessageParser {
             minutesOfDay: when.minutesOfDay,
           };
           await this.panlEvt.onCancelUnclaimedMeeting(this.path, point);
+          break;
+        }
+        case Incoming.CHECK_CLAIM_MEETING: {
+          next = MessageParser.verifyLength(buffer, StructTime.size);
+          const when = StructTime(buffer);
+          const point: ITimePoint = {
+            dayOffset: when.dayOffset,
+            minutesOfDay: when.minutesOfDay,
+          };
+          await this.panlEvt.onCheckClaimMeeting(this.path, point);
           break;
         }
         default:

@@ -61,7 +61,7 @@ describe("EWS module", () => {
       password: "T@nt3sting",
       readonly: false,
     });
-    cal = new CalendarManager(cache, consumer);
+    cal = new CalendarManager(cache, consumer, await Persist.getHubConfig());
     await cal.connect();
 
   });

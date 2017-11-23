@@ -1,15 +1,18 @@
+import {ErrorCode} from "./builder";
 import {Cache} from "./cache";
 import {
   ICalendar, ICalendarNotification,
   ITimelineEntry, ITimePoint,
 } from "./calendar";
 import {PanLPath} from "./path";
+import {IHubConfig} from "./persist";
 
 export class MockupCalendar implements ICalendar {
   private static readonly attendees = ["passcode@test.com", "rfid@test.com"];
 
   constructor(private notify: ICalendarNotification,
-              private cache: Cache) {
+              private cache: Cache,
+              private configHub: IHubConfig) {
   }
 
   public async getTimeline(path: PanLPath, dayOffset: number)
@@ -31,40 +34,59 @@ export class MockupCalendar implements ICalendar {
     return true;
   }
 
-  public async createBooking(path: PanLPath, id: ITimePoint, duration: number):
-  Promise<void> {
+  public async createBooking(path: PanLPath, id: ITimePoint, duration: number,
+                             email: string): Promise<ErrorCode> {
+    const organizer = email ? email : "PanL";
     await Promise.all([
       this.cache.setMeetingAttendees(path, id, MockupCalendar.attendees),
       this.cache.setTimelineEntry(path, id, duration),
-      this.cache.setMeetingInfo(path, id,
-        {subject: `Meeting booked from PanL`, organizer: "PanL"}),
+      this.cache.setMeetingInfo(path, id, {
+        subject: this.configHub.meetingSubject,
+        organizer,
+      }),
     ]);
+    await this.notify.onAddNotification(path, id, duration);
+    return ErrorCode.ERROR_SUCCESS;
   }
 
-  public async extendMeeting(path: PanLPath, id: ITimePoint, duration: number):
-  Promise<void> {
-    await this.notify.onExtendNotification(path, id, duration);
-  }
-
-  public async endMeeting(path: PanLPath, id: ITimePoint): Promise<void> {
+  public async extendMeeting(path: PanLPath, id: ITimePoint, duration: number,
+                             email: string): Promise<ErrorCode> {
     const info = await this.cache.getMeetingInfo(path, id);
-    info.subject = `Ended: ${info.subject}`;
-    await this.cache.setMeetingInfo(path, id, info);
-    await this.notify.onUpdateNotification(path, id);
+    info.subject = email ? `Extended by ${email}: ${info.subject}` :
+                   `Extended: ${info.subject}`;
+    await Promise.all([
+      this.cache.setTimelineEntry(path, id, duration),
+      this.cache.setMeetingInfo(path, id, info),
+    ]);
+    await this.notify.onEndTimeChangeNofication(path, id, duration);
+    return ErrorCode.ERROR_SUCCESS;
   }
 
-  public async cancelMeeting(path: PanLPath, id: ITimePoint): Promise<void> {
+  public async endMeeting(path: PanLPath, id: ITimePoint, email: string):
+  Promise<ErrorCode> {
     const info = await this.cache.getMeetingInfo(path, id);
-    info.subject = `Cancelled: ${info.subject}`;
-    await this.cache.setMeetingInfo(path, id, info);
-    await this.notify.onUpdateNotification(path, id);
+    info.subject = email ? `Ended by ${email}: ${info.subject}` :
+                   `Ended: ${info.subject}`;
+    const date = new Date();
+    const duration = date.getHours() * 60 + date.getMinutes() -
+      id.minutesOfDay;
+    await Promise.all([
+      this.cache.setTimelineEntry(path, id, duration),
+      this.cache.setMeetingInfo(path, id, info),
+    ]);
+    await this.notify.onEndTimeChangeNofication(path, id, duration);
+    return ErrorCode.ERROR_SUCCESS;
+  }
+
+  public async cancelMeeting(path: PanLPath, id: ITimePoint, email: string):
+  Promise<ErrorCode> {
+    await this.cache.removeTimelineEntry(path, id);
+    await this.notify.onDeleteNotification(path, id);
+    return ErrorCode.ERROR_SUCCESS;
   }
 
   public async cancelUnclaimedMeeting(path: PanLPath, id: ITimePoint):
-  Promise<void> {
-    const info = await this.cache.getMeetingInfo(path, id);
-    info.subject = `Unclaimed: ${info.subject}`;
-    await this.cache.setMeetingInfo(path, id, info);
-    await this.notify.onUpdateNotification(path, id);
+  Promise<ErrorCode> {
+    return this.cancelMeeting(path, id, "");
   }
 }

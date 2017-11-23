@@ -6,6 +6,7 @@ import {
   SendInvitationsOrCancellationsMode, Uri,
   WebCredentials, WellKnownFolderName,
 } from "ews-javascript-api";
+import {ErrorCode} from "./builder";
 import {Cache} from "./cache";
 import {
   ICalendar, ICalendarNotification, IMeetingInfo,
@@ -71,8 +72,8 @@ export class EWSCalendar implements ICalendar {
     return true;
   }
 
-  public async createBooking(path: PanLPath, id: ITimePoint, duration: number):
-  Promise<void> {
+  public async createBooking(path: PanLPath, id: ITimePoint, duration: number,
+                             email: string): Promise<ErrorCode> {
     await this.impersonationSupport(path);
 
     // Create the appointment.
@@ -95,10 +96,12 @@ export class EWSCalendar implements ICalendar {
     // Verify that the meeting was created.
     // let item = await Item.Bind(this.service, appointment.Id, new
     // PropertySet(ItemSchema.Subject));
+    // TODO: Set correct error code
+    return ErrorCode.ERROR_SUCCESS;
   }
 
-  public async extendMeeting(path: PanLPath, id: ITimePoint, duration: number):
-  Promise<void> {
+  public async extendMeeting(path: PanLPath, id: ITimePoint, duration: number,
+                             email: string): Promise<ErrorCode> {
     await this.impersonationSupport(path);
 
     const meetingId = await this.cache.getMeetingId(path, id);
@@ -119,12 +122,15 @@ export class EWSCalendar implements ICalendar {
 
       // Send the update request to the Exchange server.
       await appointment.Update(ConflictResolutionMode.AlwaysOverwrite, mode);
+      return ErrorCode.ERROR_SUCCESS;
     } catch (error) {
+      // TODO: Set correct error code
       throw new Error(error.message);
     }
   }
 
-  public async endMeeting(path: PanLPath, id: ITimePoint): Promise<void> {
+  public async endMeeting(path: PanLPath, id: ITimePoint, email: string):
+  Promise<ErrorCode> {
     await this.impersonationSupport(path);
 
     const meetingId = await this.cache.getMeetingId(path, id);
@@ -145,12 +151,15 @@ export class EWSCalendar implements ICalendar {
 
       // Send the update request to the Exchange server.
       await appointment.Update(ConflictResolutionMode.AlwaysOverwrite, mode);
+      return ErrorCode.ERROR_SUCCESS;
     } catch (error) {
+      // TODO: Set correct error code
       throw new Error(error.message);
     }
   }
 
-  public async cancelMeeting(path: PanLPath, id: ITimePoint): Promise<void> {
+  public async cancelMeeting(path: PanLPath, id: ITimePoint, email: string):
+  Promise<ErrorCode> {
     await this.impersonationSupport(path);
 
     const meetingId = await this.cache.getMeetingId(path, id);
@@ -162,14 +171,18 @@ export class EWSCalendar implements ICalendar {
 
       // Delete the meeting by using the CancelMeeting method.
       await meeting.CancelMeeting();
+      return ErrorCode.ERROR_SUCCESS;
     } catch (error) {
+      // TODO: Set correct error code
       throw new Error(error.message);
     }
   }
 
   public async cancelUnclaimedMeeting(path: PanLPath, id: ITimePoint):
-  Promise<void> {
-    await this.cancelMeeting(path, id);
+  Promise<ErrorCode> {
+    await this.cancelMeeting(path, id, "");
+    // TODO: Set correct error code
+    return ErrorCode.ERROR_SUCCESS;
   }
 
   private async impersonationSupport(path: PanLPath) {

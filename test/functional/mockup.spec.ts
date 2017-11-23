@@ -54,7 +54,7 @@ describe("Mockup calendar module", () => {
       password: "",
       readonly: false});
     cache = await Cache.getInstance();
-    cal = new CalendarManager(cache, consumer);
+    cal = new CalendarManager(cache, consumer, await Persist.getHubConfig());
   });
   after(async () => {
     await cache.stop();
