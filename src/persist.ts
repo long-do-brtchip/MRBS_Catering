@@ -44,8 +44,8 @@ export interface IHubConfig {
 
 export interface IPanlConfig {
   timeout: number;
-  typeAuthAllowPasscode: IMeetingControlUnit;
-  typeAuthAllowRFID: IMeetingControlUnit;
+  authAllowPasscode: IMeetingControlUnit;
+  authAllowRFID: IMeetingControlUnit;
 }
 
 export interface IRoom {
@@ -147,7 +147,7 @@ export class Persist {
   public static async getPanlConfig(): Promise<IPanlConfig> {
     return Persist.getConfig<IPanlConfig>(ConfigType.CALENDAR_CONFIG, {
       timeout: 10,
-      typeAuthAllowPasscode: {
+      authAllowPasscode: {
         extendMeeting: true,
         claimMeeting: true,
         cancelMeeting: true,
@@ -155,7 +155,7 @@ export class Persist {
         onSpotBooking: true,
         featureBooking: true,
       },
-      typeAuthAllowRFID: {
+      authAllowRFID: {
         extendMeeting: true,
         claimMeeting: true,
         cancelMeeting: true,
