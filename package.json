@@ -10,7 +10,7 @@
     "build": "tsc --skipLibCheck && npm run tslint",
     "tslint": "tslint -c tslint.json -p tsconfig.json",
     "test": "NODE_ENV=test nyc mocha test/**/*.ts",
-    "web": "[ ! -d web/src ] && git submodule update --init --recursive; cd web; [ ! -d node_modules ] && npm install; ng build && cd -",
+    "web": "[ ! -d web/src ] && git submodule update --init --recursive; cd web; [ ! -d node_modules ] && npm install; npx ng build && cd -",
     "prepush": "npm run build"
   },
   "nyc": {
