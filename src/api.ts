@@ -23,7 +23,6 @@ async function createRoom(address: string, name: string): Promise<boolean> {
 }
 
 api.route("/rooms").get(async (req, res) => {
-  log.debug("rooms");
   const links = await Link.find();
   return res.json(links);
 }).post(async (req, res) => {
