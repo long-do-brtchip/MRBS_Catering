@@ -22,7 +22,6 @@ export class Auth {
   public static async addRfid(rfidcode: Buffer):
   Promise<void> {
     const rfid = new Rfid();
-    log.debug("buffer " + rfidcode);
     rfid.rfidcode = rfidcode;
     await rfid.save();
   }
@@ -102,16 +101,6 @@ export class Auth {
     return retString.toString();
   }
 
-  public async linkPassCodetoEmployee(empId: number, code: number):
-  Promise<void> {
-    const emp = await Employee.findOne(
-        {where: {id: empId}}) as Employee;
-    const passCode = await PassCode.findOne(
-        {where: {passcode: code}}) as PassCode;
-    // Link RFID to Employee
-    passCode.employee = emp;
-    await passCode.save();
-  }
 
   public async modifyEmployee(id: number, email: string, name: string):
   Promise<string> {
@@ -157,18 +146,5 @@ export class Auth {
         retString = "";
     }
     return retString;
-  }
-
-  public async authByRFID(epc: Buffer): Promise<string> {
-    log.info("rfid authen");
-    const rfid = await Rfid.findOne(
-        {where: {rfidcode: epc}}) as Rfid;
-    if (rfid === undefined) {
-        return "";
-    } else {
-      const emp = await Employee.findOne(
-        {where: {id: rfid.employee.id}}) as Employee;
-      return emp.email;
-    }
   }
 }
