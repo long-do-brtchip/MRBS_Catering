@@ -21,7 +21,8 @@
     "exclude": [
       "**/*.d.ts",
       "dist",
-      "coverage"
+      "coverage",
+      "web"
     ],
     "reporter": [
       "html"
@@ -56,6 +57,7 @@
     "@types/moment-timezone": "^0.5.2",
     "@types/node": "^8.0.50",
     "@types/ref": "0.0.28",
+    "@types/ref-array": "0.0.28",
     "@types/rewire": "^2.5.28",
     "@types/uuid": "^3.4.3",
     "@types/winston": "^2.3.7",

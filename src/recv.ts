@@ -1,4 +1,6 @@
+import {EventEmitter} from "events";
 import ref = require("ref");
+import ArrayType = require("ref-array");
 import StructType = require("ref-struct");
 import {ITimelineRequest, ITimePoint} from "./calendar";
 import {log} from "./log";
@@ -28,6 +30,10 @@ enum Incoming {
 
 const StructAuthByPasscode = StructType({
   passcode : ref.types.uint32,
+}, {packed: true});
+
+const StructAuthByRFID = StructType({
+  epc : ArrayType(ref.types.uint8, 11),
 }, {packed: true});
 
 const StructTimeline = StructType({
@@ -66,61 +72,70 @@ export class MessageParser {
     return buffer.slice(1);
   }
 
-  private static verifyLength(buffer: Buffer, min: number): Buffer {
-    if (buffer.length >= min) {
-      return buffer.slice(min);
-    }
-    // TODO: concat to next buffer
-    throw new Error(`Invalid message length, expect at least ${min}, ` +
-      `but only got ${buffer.length}`);
-  }
-
+  private stopped = false;
+  private evt = new EventEmitter();
   private path: PanLPath;
   private getBody = false;
+  private bufs: Buffer[] = [];
 
   constructor(private agentEvt: IAgentEvent, private panlEvt: IPanLEvent,
               public id: number) {
-    log.silly(`Create MessageParser for agent ${this.id}`);
     this.agentEvt.onAgentConnected(id);
   }
 
-  public async onData(buffer: Buffer): Promise<void> {
-    while (buffer.byteLength) {
-      const id = buffer[0];
-      let next = buffer = buffer.slice(1);
+  public onData(buffer: Buffer): void {
+    this.bufs.push(buffer);
+    this.evt.emit("rdy");
+  }
 
-      switch (id) {
+  public stop() {
+    this.stopped = true;
+    this.evt.emit("stop");
+  }
+
+  public startParserEngine(): Promise<void> {
+    return this.parseBuffer(Buffer.alloc(0));
+  }
+
+  private async parseBuffer(next: Buffer): Promise<void> {
+    while (true) {
+      let buf;
+      // Get ID
+      [buf, next] = await this.waitBuf(next, 1);
+      // Parse payload
+      switch (buf[0]) {
         case Incoming.REQUEST_FIRMWARE:
           await this.panlEvt.onRequestFirmware(this.path);
           break;
         case Incoming.AUTH_BY_PASSCODE:
-          next = MessageParser.verifyLength(buffer, StructAuthByPasscode.size);
+          [buf, next] = await this.waitBuf(next, StructAuthByPasscode.size);
           await this.panlEvt.onPasscode(this.path,
-            StructAuthByPasscode(buffer).passcode);
+            StructAuthByPasscode(buf).passcode);
           break;
         case Incoming.AUTH_BY_RFID:
-          throw new Error("Method not implemented.");
+          [buf, next] = await this.waitBuf(next, StructAuthByRFID.size);
+          await this.panlEvt.onRFID(this.path, buf);
         case Incoming.SET_ADDRESS:
-          next = MessageParser.verifyLength(buffer, 1);
-          this.path = new PanLPath(this.id, buffer[0]);
+          [buf, next] = await this.waitBuf(next, 1);
+          this.path = new PanLPath(this.id, buf[0]);
           break;
         case Incoming.REPORT_UUID:
-          next = MessageParser.verifyLength(buffer, 8);
-          this.panlEvt.onReportUUID(this.path, buffer.slice(0, 8));
+          [buf, next] = await this.waitBuf(next, 8);
+          this.panlEvt.onReportUUID(this.path, buf);
           break;
         case Incoming.REPORT_DEVICE_CHANGE:
           await this.agentEvt.onDeviceChange(this.id);
           break;
         case Incoming.REPORT_PANL_STATUS:
-          next = MessageParser.verifyLength(buffer, 1);
-          await this.panlEvt.onStatus(this.path, buffer[0]);
+          [buf, next] = await this.waitBuf(next, 1);
+          await this.panlEvt.onStatus(this.path, buf[0]);
           break;
         case Incoming.GET_LOCAL_TIME:
           this.panlEvt.onGetTime(this.path);
           break;
         case Incoming.GET_TIMELINE: {
-          next = MessageParser.verifyLength(buffer, StructTimeline.size);
-          const tl = StructTimeline(buffer);
+          [buf, next] = await this.waitBuf(next, StructTimeline.size);
+          const tl = StructTimeline(buf);
           const req: ITimelineRequest = {
             id: {dayOffset: tl.offset, minutesOfDay: Math.abs(tl.time)},
             lookForward: tl.time >= 0,
@@ -133,15 +148,15 @@ export class MessageParser {
           this.getBody = true;
           break;
         case Incoming.GET_MEETING_INFO: {
-          next = MessageParser.verifyLength(buffer, StructGetMeetingInfo.size);
+          [buf, next] = await this.waitBuf(next, StructGetMeetingInfo.size);
           this.panlEvt.onGetMeetingInfo(this.path,
-            StructGetMeetingInfo(buffer).minutes, this.getBody);
+            StructGetMeetingInfo(buf).minutes, this.getBody);
           this.getBody = false;
           break;
         }
         case Incoming.EXTEND_MEETING: {
-          next = MessageParser.verifyLength(buffer, StructTimespan.size);
-          const span = StructTimespan(buffer);
+          [buf, next] = await this.waitBuf(next, StructTimespan.size);
+          const span = StructTimespan(buf);
           const point: ITimePoint = {
             dayOffset: span.dayOffset,
             minutesOfDay: span.minutesOfDay,
@@ -150,8 +165,8 @@ export class MessageParser {
           break;
         }
         case Incoming.CREATE_BOOKING: {
-          next = MessageParser.verifyLength(buffer, StructTimespan.size);
-          const span = StructTimespan(buffer);
+          [buf, next] = await this.waitBuf(next, StructTimespan.size);
+          const span = StructTimespan(buf);
           const point: ITimePoint = {
             dayOffset: span.dayOffset,
             minutesOfDay: span.minutesOfDay,
@@ -160,8 +175,8 @@ export class MessageParser {
           break;
         }
         case Incoming.CANCEL_MEETING: {
-          next = MessageParser.verifyLength(buffer, StructTime.size);
-          const when = StructTime(buffer);
+          [buf, next] = await this.waitBuf(next, StructTime.size);
+          const when = StructTime(buf);
           const point: ITimePoint = {
             dayOffset: when.dayOffset,
             minutesOfDay: when.minutesOfDay,
@@ -170,8 +185,8 @@ export class MessageParser {
           break;
         }
         case Incoming.END_MEETING: {
-          next = MessageParser.verifyLength(buffer, StructTime.size);
-          const when = StructTime(buffer);
+          [buf, next] = await this.waitBuf(next, StructTime.size);
+          const when = StructTime(buf);
           const point: ITimePoint = {
             dayOffset: when.dayOffset,
             minutesOfDay: when.minutesOfDay,
@@ -180,8 +195,8 @@ export class MessageParser {
           break;
         }
         case Incoming.CANCEL_UNCLAIM_MEETING: {
-          next = MessageParser.verifyLength(buffer, StructTime.size);
-          const when = StructTime(buffer);
+          [buf, next] = await this.waitBuf(next, StructTime.size);
+          const when = StructTime(buf);
           const point: ITimePoint = {
             dayOffset: when.dayOffset,
             minutesOfDay: when.minutesOfDay,
@@ -190,8 +205,8 @@ export class MessageParser {
           break;
         }
         case Incoming.CHECK_CLAIM_MEETING: {
-          next = MessageParser.verifyLength(buffer, StructTime.size);
-          const when = StructTime(buffer);
+          [buf, next] = await this.waitBuf(next, StructTime.size);
+          const when = StructTime(buf);
           const point: ITimePoint = {
             dayOffset: when.dayOffset,
             minutesOfDay: when.minutesOfDay,
@@ -202,7 +217,33 @@ export class MessageParser {
         default:
           throw new Error("Unknown Incoming ID.");
       }
-      buffer = next;
     }
+  }
+
+  private async getNextBuffer(): Promise<Buffer> {
+    await new Promise<void>((resolve, reject) => {
+      this.evt.on("rdy", resolve);
+      this.evt.on("stop", () => reject("requested to stop"));
+      if (this.stopped) {
+        reject("requested to stop");
+      }
+      if (this.bufs.length !== 0) {
+        resolve();
+      }
+    });
+    const buf = this.bufs.shift();
+    if (buf === undefined) {
+      return this.getNextBuffer();
+    }
+    return buf;
+  }
+
+  private async waitBuf(buffer: Buffer, min: number):
+  Promise<[Buffer, Buffer]> {
+    while (buffer.length < min) {
+      const next = await this.getNextBuffer() ;
+      buffer = (buffer.length === 0) ? next : Buffer.concat([buffer, next]);
+    }
+    return [buffer.slice(0, min), buffer.slice(min)];
   }
 }

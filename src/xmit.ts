@@ -44,8 +44,9 @@ export class Transmit {
     }
   }
 
-  public stop(): void {
+  public async stop(): Promise<void> {
     this.tx.onStop();
+    await new Promise((resolve) => setTimeout(resolve, 10));
   }
 
   public broadcastToAllImmediately(bufs: Buffer[]): void {

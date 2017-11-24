@@ -20,27 +20,23 @@ export class PanLSocketController implements IMessageTransport {
     const server = net.createServer((socket) => {
       const s = socket as any;
 
-      socket.on("data", async (data) => {
+      socket.on("data", (data) => {
           if (s.parser) {
-            try {
-              log.silly(`Received ${data.byteLength} bytes from Agent` +
-                `${s.parser.id}: ${data.toString("hex")}`);
-              socket.pause();
-              await s.parser.onData(data);
-              socket.resume();
-            } catch (e) {
-              log.debug(`Failed to parse: ${e}, close socket.`);
-              socket.end();
-            }
+            log.silly(`Received ${data.byteLength} bytes from Agent` +
+              `${s.parser.id}: ${data.toString("hex")}`);
+            s.parser.onData(data);
           } else {
             MessageParser.parseAgentID(data).then(async (buf) => {
-              Database.getInstance().then((db) => {
-                Persist.getAgentId(buf).then((id) => {
-                    log.info(`Agent ${buf.toString("hex")} is using id: ${id}`);
-                    this.sockets.set(id, socket);
-                    s.parser = new MessageParser(agentEvt, panlEvt, id);
-                  });
-                db.stop();
+              Persist.getAgentId(buf).then((id) => {
+                log.info(`Agent ${buf.toString("hex")} is using id: ${id}`);
+                this.sockets.set(id, socket);
+                s.parser = new MessageParser(agentEvt, panlEvt, id);
+                log.silly(`Start message parser for agent ${s.parser.id}`);
+                const engine = s.parser.startParserEngine();
+                engine.catch((err: Error) => {
+                  log.silly(`Message parser for agent ${s.parser.id} ` +
+                    `stopped: ${err}`);
+                });
               });
             }).catch((reject) => {
               log.debug(`Received non Agent ID data ${data}, close socket.`);
@@ -52,6 +48,7 @@ export class PanLSocketController implements IMessageTransport {
       socket.on("end", () => {
         if (s.parser !== void 0) {
           log.debug("Received socket end event");
+          s.parser.stop();
           this.sockets.delete(s.parser.id);
           this.agentEvt.onAgentEnd(s.parser.id);
         }
@@ -60,6 +57,7 @@ export class PanLSocketController implements IMessageTransport {
       socket.on("error", (err) => {
         if (s.parser !== void 0) {
           log.debug("Received socket error event");
+          s.parser.stop();
           this.sockets.delete(s.parser.id);
           this.agentEvt.onAgentError(s.parser.id, err);
         }
@@ -85,9 +83,14 @@ export class PanLSocketController implements IMessageTransport {
       this.stop.on("stop", () => {
         for (const [id, socket] of this.sockets) {
           log.info(`Closing socket for agent ${id}...`);
+          const s = socket as any;
+          if (s.parser) {
+            s.parser.stop();
+          }
           socket.end();
         }
-        log.silly("Close socket");
+        this.sockets.clear();
+        log.silly("Close socket server");
         server.close();
       });
       log.info(`PanLController listen on port ${port}`);

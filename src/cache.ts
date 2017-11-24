@@ -36,11 +36,13 @@ export class Cache {
           resolve(Cache.instance);
         });
         observer.on("error", (error) => {
+          log.silly("Redis observer error");
           client.quit();
           reject(error);
         });
       });
       client.on("error", (error) => {
+        log.silly("Redis error");
         reject(error);
       });
     });
