@@ -5,7 +5,7 @@ import {CalendarManager, ITimelineRequest, ITimePoint} from "./calendar";
 import {Database} from "./database";
 import {log} from "./log";
 import {PanLPath} from "./path";
-import {IHubConfig, Persist} from "./persist";
+import {IHubConfig, IPanlConfig, Persist} from "./persist";
 import {Transmit} from "./xmit";
 
 export interface IAgentEvent {
@@ -50,7 +50,8 @@ export class PanLService implements IAgentEvent, IPanLEvent, ICalendarEvent {
     if (PanLService.instance === undefined) {
       PanLService.db = await Database.getInstance();
       PanLService.cache = await Cache.getInstance();
-      PanLService.instance = new PanLService(await Persist.getHubConfig());
+      PanLService.instance = new PanLService(await Persist.getHubConfig(),
+        await Persist.getPanlConfig());
     } else {
       PanLService.instance.addRef();
     }
@@ -69,9 +70,10 @@ export class PanLService implements IAgentEvent, IPanLEvent, ICalendarEvent {
   private tx: Transmit;
   private cal: CalendarManager;
 
-  private constructor(private hub: IHubConfig, private refCnt = 1) {
+  private constructor(private hub: IHubConfig, private panl: IPanlConfig,
+                      private refCnt = 1) {
     this.tx = new Transmit(this, this);
-    this.cal = new CalendarManager(PanLService.cache, this, hub);
+    this.cal = new CalendarManager(PanLService.cache, this, hub, panl);
     this.cal.connect();
   }
 
@@ -282,10 +284,6 @@ export class PanLService implements IAgentEvent, IPanLEvent, ICalendarEvent {
   }
 
   public async onAgentConnected(agent: number): Promise<void> {
-    const [hub, panl] = await Promise.all([
-      Persist.getHubConfig(),
-      Persist.getPanlConfig(),
-    ]);
     const msgs = [
       MessageBuilder.buildExpectedFirmwareVersion(),
       MessageBuilder.buildUUID(),
@@ -293,7 +291,7 @@ export class PanLService implements IAgentEvent, IPanLEvent, ICalendarEvent {
       MessageBuilder.buildTimeFormat(),
       // Build SetTime at last to minimize the latency
       MessageBuilder.buildTime(),
-      MessageBuilder.buildAccessRight(hub, panl),
+      MessageBuilder.buildAccessRight(await Persist.getPanlConfig()),
     ];
     /* Broadcast init settings to single agent */
     try {

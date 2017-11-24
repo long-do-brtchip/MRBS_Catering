@@ -5,7 +5,7 @@ import {EWSCalendar} from "./ews";
 import {log} from "./log";
 import {MockupCalendar} from "./mockup";
 import {PanLPath} from "./path";
-import {CalendarType, IHubConfig, Persist} from "./persist";
+import {CalendarType, IHubConfig, IPanlConfig, Persist} from "./persist";
 import {ICalendarEvent} from "./service";
 
 export interface ITimelineEntry {
@@ -55,9 +55,9 @@ export class CalendarManager implements ICalendarNotification {
   private isConnected: boolean;
 
   constructor(private cache: Cache, private event: ICalendarEvent,
-              private hubConfig: IHubConfig) {
-    if (this.event === undefined || this.cache === undefined ||
-        hubConfig === undefined) {
+              private hubConfig: IHubConfig, private panlConfig: IPanlConfig) {
+    if (event === undefined || cache === undefined ||
+        hubConfig === undefined || panlConfig === undefined) {
       throw(new Error("Invalid parameter"));
     }
   }
@@ -86,11 +86,12 @@ export class CalendarManager implements ICalendarNotification {
 
   public async createBooking(path: PanLPath, id: ITimePoint, duration: number):
   Promise<ErrorCode> {
-    if (this.hubConfig.featureDisabled.onSpotBooking) {
+    if (this.panlConfig.featureDisabled.onSpotBooking) {
       return ErrorCode.ERROR_FEATURE_DISABLED;
     }
     const email = await this.cache.getAuth(path);
-    if (this.hubConfig.requireAuthentication.onSpotBooking &&
+    if ((this.panlConfig.authAllowRFID.onSpotBooking ||
+         this.panlConfig.authAllowPasscode) &&
         email.length === 0) {
       return ErrorCode.ERROR_AUTH_ERROR;
     }
@@ -99,11 +100,12 @@ export class CalendarManager implements ICalendarNotification {
 
   public async extendMeeting(path: PanLPath, id: ITimePoint, duration: number):
   Promise<ErrorCode> {
-    if (this.hubConfig.featureDisabled.extendMeeting) {
+    if (this.panlConfig.featureDisabled.extendMeeting) {
       return ErrorCode.ERROR_FEATURE_DISABLED;
     }
     const email = await this.cache.getAuth(path);
-    if (this.hubConfig.requireAuthentication.extendMeeting) {
+    if (this.panlConfig.authAllowPasscode.extendMeeting ||
+        this.panlConfig.authAllowRFID.extendMeeting) {
       if (!await this.cache.validateAttendee(path, id, email)) {
         return ErrorCode.ERROR_AUTH_ERROR;
       }
@@ -112,11 +114,12 @@ export class CalendarManager implements ICalendarNotification {
   }
 
   public async endMeeting(path: PanLPath, id: ITimePoint): Promise<ErrorCode> {
-    if (this.hubConfig.featureDisabled.endMeeting) {
+    if (this.panlConfig.featureDisabled.endMeeting) {
       return ErrorCode.ERROR_FEATURE_DISABLED;
     }
     const email = await this.cache.getAuth(path);
-    if (this.hubConfig.requireAuthentication.endMeeting) {
+    if (this.panlConfig.authAllowPasscode.endMeeting ||
+        this.panlConfig.authAllowRFID.endMeeting) {
       if (!await this.cache.validateAttendee(path, id, email)) {
         return ErrorCode.ERROR_AUTH_ERROR;
       }
@@ -126,11 +129,12 @@ export class CalendarManager implements ICalendarNotification {
 
   public async cancelMeeting(path: PanLPath, id: ITimePoint):
   Promise<ErrorCode> {
-    if (this.hubConfig.featureDisabled.cancelMeeting) {
+    if (this.panlConfig.featureDisabled.cancelMeeting) {
       return ErrorCode.ERROR_FEATURE_DISABLED;
     }
     const email = await this.cache.getAuth(path);
-    if (this.hubConfig.requireAuthentication.cancelMeeting) {
+    if (this.panlConfig.authAllowPasscode.cancelMeeting ||
+        this.panlConfig.authAllowRFID.cancelMeeting) {
       if (!await this.cache.validateAttendee(path, id, email)) {
         return ErrorCode.ERROR_AUTH_ERROR;
       }
@@ -140,10 +144,11 @@ export class CalendarManager implements ICalendarNotification {
 
   public async checkClaimMeeting(path: PanLPath, id: ITimePoint):
   Promise<ErrorCode> {
-    if (this.hubConfig.featureDisabled.claimMeeting) {
+    if (this.panlConfig.featureDisabled.claimMeeting) {
       return ErrorCode.ERROR_FEATURE_DISABLED;
     }
-    if (this.hubConfig.requireAuthentication.claimMeeting) {
+    if (this.panlConfig.authAllowPasscode.claimMeeting ||
+        this.panlConfig.authAllowRFID.claimMeeting) {
       if (!await this.cache.validateAttendee(path, id,
         await this.cache.getAuth(path))) {
         return ErrorCode.ERROR_AUTH_ERROR;

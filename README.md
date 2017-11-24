@@ -188,7 +188,7 @@ struct MeetingControlUnit {
 };
 struct AccessRight {
 	struct MeetingControlUnit featureDisabled;
-	struct MeetingControlUnit requireAuthentication;
+	// Authentication is disabled when both authAllowPasscode and authAllowRFID are disabled
 	struct MeetingControlUnit authAllowPasscode;
 	struct MeetingControlUnit authAllowRFID;
 };

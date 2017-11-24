@@ -38,12 +38,11 @@ export interface IMeetingControlUnit {
 export interface IHubConfig {
   expiry: number;
   meetingSubject: string;
-  featureDisabled: IMeetingControlUnit;
-  requireAuthentication: IMeetingControlUnit;
 }
 
 export interface IPanlConfig {
   timeout: number;
+  featureDisabled: IMeetingControlUnit;
   authAllowPasscode: IMeetingControlUnit;
   authAllowRFID: IMeetingControlUnit;
 }
@@ -126,6 +125,12 @@ export class Persist {
     return Persist.getConfig<IHubConfig>(ConfigType.HUB_CONFIG, {
       expiry: 180,
       meetingSubject: "Meeting create by PanL70",
+      });
+  }
+
+  public static async getPanlConfig(): Promise<IPanlConfig> {
+    return Persist.getConfig<IPanlConfig>(ConfigType.PANL_CONFIG, {
+      timeout: 10,
       featureDisabled: {
         extendMeeting: false,
         claimMeeting: false,
@@ -134,19 +139,6 @@ export class Persist {
         onSpotBooking: false,
         featureBooking: true,
       },
-      requireAuthentication: {
-        extendMeeting: true,
-        claimMeeting: true,
-        cancelMeeting: true,
-        endMeeting: true,
-        onSpotBooking: true,
-        featureBooking: true,
-      }});
-  }
-
-  public static async getPanlConfig(): Promise<IPanlConfig> {
-    return Persist.getConfig<IPanlConfig>(ConfigType.PANL_CONFIG, {
-      timeout: 10,
       authAllowPasscode: {
         extendMeeting: true,
         claimMeeting: true,

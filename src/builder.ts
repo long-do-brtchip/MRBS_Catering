@@ -88,7 +88,6 @@ const StructSetRoomEquipments = StructType({
 const StructAccessRight = StructType({
   cmd: ref.types.uint8,
   featureDisabled: ref.types.uint8,
-  requireAuthentication : ref.types.uint8,
   authAllowPasscode : ref.types.uint8,
   authAllowRFID : ref.types.uint8,
 }, {packed: true});
@@ -336,12 +335,10 @@ export class MessageBuilder {
     }).ref();
   }
 
-  public static buildAccessRight(hub: IHubConfig, panl: IPanlConfig): Buffer {
+  public static buildAccessRight(panl: IPanlConfig): Buffer {
     return new StructAccessRight({
       cmd: Outgoing.SET_ACCESS_RIGHT,
-      featureDisabled: MessageBuilder.convertBitArray(hub.featureDisabled),
-      requireAuthentication: MessageBuilder.convertBitArray(
-        hub.requireAuthentication),
+      featureDisabled: MessageBuilder.convertBitArray(panl.featureDisabled),
       authAllowPasscode: MessageBuilder.convertBitArray(panl.authAllowPasscode),
       authAllowRFID: MessageBuilder.convertBitArray(panl.authAllowRFID),
     }).ref();
