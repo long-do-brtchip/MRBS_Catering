@@ -19,68 +19,63 @@ export class Auth {
   }
 
   public static async addRfid(rfidcode: Buffer):
-  Promise<number> {
+  Promise<void> {
     const rfid = new Rfid();
-    log.debug("rfid" + rfidcode);
     rfid.rfidcode = rfidcode;
     await rfid.save();
-    return rfid.id;
   }
 
   public static async addPasscode(inPassCode: number):
-  Promise<number> {
-    const varPassCode = new PassCode();
-    varPassCode.passcode = inPassCode;
-    await varPassCode.save();
-    return varPassCode.id;
+  Promise<void> {
+    const passCode = new PassCode();
+    passCode.passcode = inPassCode;
+    await passCode.save();
   }
 
   public static async authByPasscode(code: number): Promise<string> {
-    log.info("passcode authen");
-    log.debug("code: ", code.toString(10));
-    const varPassCode = await PassCode.findOne(
-        {where: {passcode: code.toString(10)}}) as PassCode;
-    if (varPassCode === undefined) {
+    const passCode = await PassCode.findOne(
+        {where: {passcode: code}}) as PassCode;
+    if (passCode === undefined) {
         log.warn("Entry does not exist");
         return "";
     } else {
         const emp = await Employee.findOne(
-          {where: {id: varPassCode.employeeid.id}}) as Employee;
+          {where: {id: passCode.employee.id}}) as Employee;
         return emp.email;
     }
   }
 
   public static async linkRFIDtoEmployee(empId: number, rfid: number):
   Promise<void> {
-    const Emp = await Employee.findOne(
+    const emp = await Employee.findOne(
         {where: {id: empId}}) as Employee;
     const varRfid = await Rfid.findOne(
         {where: {id: rfid}}) as Rfid;
     // Link RFID to Employee
-    varRfid.employeeid = Emp;
+    varRfid.employee = emp;
     await varRfid.save();
   }
 
-  public async linkPassCodetoEmployee(empId: number, passId: number):
+  public async linkPassCodetoEmployee(empId: number, code: number):
   Promise<void> {
     const emp = await Employee.findOne(
         {where: {id: empId}}) as Employee;
     const passCode = await PassCode.findOne(
-        {where: {id: passId}}) as PassCode;
+        {where: {passcode: code}}) as PassCode;
     // Link RFID to Employee
-    passCode.employeeid = emp;
+    passCode.employee = emp;
     await passCode.save();
   }
 
   public async modifyEmployee(id: number, email: string, name: string):
   Promise<string> {
     let retString = "Update success!";
-    const Emp = await Employee.findOne(
+    const emp = await Employee.findOne(
         {where: {employeeid: id}}) as Employee;
-    if (Emp !== undefined) {
-        Emp.name = name;
-        Emp.email = email;
-        await Emp.save();
+    if (emp !== undefined) {
+        emp.name = name;
+        emp.email = email;
+        await emp.save();
     } else {
         log.warn("Cannot find Employee");
         retString = "";
@@ -91,11 +86,11 @@ export class Auth {
   public async modifyRfid(empID: Employee, rfidcode: Buffer, passcode: number):
   Promise<string> {
     let retString = "Update success!";
-    const varRfid = await Rfid.findOne(
+    const rfid = await Rfid.findOne(
         {where: {employeeid: empID.id}}) as Rfid;
-    if (varRfid !== undefined) {
-        varRfid.rfidcode = rfidcode;
-        await varRfid.save();
+    if (rfid !== undefined) {
+        rfid.rfidcode = rfidcode;
+        await rfid.save();
     } else {
         log.warn("Cannot find Employee");
         retString = "";
@@ -106,11 +101,11 @@ export class Auth {
   public async modifyPassCode(empID: Employee, passcode: number):
   Promise<string> {
     let retString = "Update success!";
-    const varPassCode = await PassCode.findOne(
-        {where: {employeeid: empID.id}}) as PassCode;
-    if (varPassCode !== undefined) {
-      varPassCode.passcode = passcode;
-      await varPassCode.save();
+    const passCode = await PassCode.findOne(
+        {where: {employee: empID.id}}) as PassCode;
+    if (passCode !== undefined) {
+        passCode.passcode = passcode;
+      await passCode.save();
     } else {
         log.warn("Cannot find Employee");
         retString = "";
@@ -120,25 +115,14 @@ export class Auth {
 
   public async authByRFID(epc: Buffer): Promise<string> {
     log.info("rfid authen");
-    const varRfid = await Rfid.findOne(
-        {where: {rfidcode: this.convertBufferToString(epc)}}) as Rfid;
-    if (varRfid === undefined) {
+    const rfid = await Rfid.findOne(
+        {where: {rfidcode: epc}}) as Rfid;
+    if (rfid === undefined) {
         return "";
     } else {
       const emp = await Employee.findOne(
-        {where: {id: varRfid.employeeid.id}}) as Employee;
+        {where: {id: rfid.employee.id}}) as Employee;
       return emp.email;
     }
-  }
-
-  private decimalToHexString(input: any): number {
-    if (input < 0) {
-        input = 0xFF + input + 1;
-    }
-    return input.toString(16);
-  }
-
-  public static async authByRFID(epc: Buffer): Promise<string> {
-    return "rfid@test.com";
   }
 }

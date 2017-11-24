@@ -6,109 +6,104 @@ import {Employee} from "./entity/auth/employee";
 import {Rfid} from "./entity/auth/rfid";
 import {log} from "./log";
 
-export const rfidapi = express.Router();
+export const authapi = express.Router();
 const jsonParser = bodyParser.json();
 
-rfidapi.route("/employee/:id").get(async (req, res) => {
+authapi.route("/employee/:id").get(async (req, res) => {
     try {
-        log.debug("rfidapi");
-        const varEmployee = await Employee.findOne(
+        log.debug("authapi");
+        const employee = await Employee.findOne(
             {where: {id: req.params.id}}) as Employee;
-        if (varEmployee !== undefined) {
-            res.json(varEmployee);
-            res.end();
+        if (employee !== undefined) {
+            res.json(employee);
+            res.sendStatus(200);
         } else {
-            res.end("Employee does not exist!");
+            res.sendStatus(404);
         }
     } catch (err) {
         log.error("Ops!:", err);
     }
 });
 
-rfidapi.route("/rfid/:id").get(async (req, res) => {
+authapi.route("/rfid/:id").get(async (req, res) => {
     try {
-        log.debug("rfidapi");
-        const varRfid = await Rfid.findOne(
+        log.silly("authapi");
+        const rfid = await Rfid.findOne(
             {where: {id: req.params.id}}) as Rfid;
-        if (varRfid !== undefined) {
-            res.json(varRfid);
-            res.end();
+        if (rfid !== undefined) {
+            res.json(rfid);
+            res.sendStatus(200);
         } else {
-            res.end("RFID does not exist!");
+            res.sendStatus(404);
         }
     } catch (err) {
         log.error("Ops!:", err);
     }
 });
 
-rfidapi.route("/add/employee/:name/:email").post(async (req, res) => {
-    log.debug("rfidapi " + 29);
-    const varEmployee = await Employee.findOne(
+authapi.route("/employee/:name/:email").post(async (req, res) => {
+    const employee = await Employee.findOne(
         {where: {name: req.params.name}}) as Employee;
-    if (varEmployee === undefined) {
+    if (employee === undefined) {
         Auth.addEmployee(req.params.name, req.params.email)
         .then((data) => {
-            res.end("Add employee succesfully, id = " + data);
+            res.status(201).send("Add employee succesfully, id = " + data);
         });
     } else {
-        res.end("Employee existed !");
+        res.Status(412).send("Employee existed!");
     }
 });
 
-rfidapi.route("/add/rfid/:rfidcode").post(async (req, res) => {
-    log.debug("rfidapi " + 43);
-    const varRfid = await Rfid.findOne(
+authapi.route("/rfid/:rfidcode").post(async (req, res) => {
+    const rfid = await Rfid.findOne(
         {where: {id: req.params.rfidcode}}) as Rfid;
-    log.debug("rfidapi " + 46);
-    res.end();
-    if (varRfid === undefined) {
-        log.debug("rfidapi " + 48);
+    if (rfid === undefined) {
         Auth.addRfid(req.params.rfidcode)
         .then((data) => {
-            res.end("Add employee succesfully, id = " + data);
+            res.status(201).send("Add rfid succesfully");
         });
     } else {
-        res.end("Employee existed !");
+        res.Status(412).send("Employee existed");
     }
 });
 
-rfidapi.route("/link/rfid/:empId/:rfidId").post(async (req, res) => {
-    const varRfid = await Rfid.findOne(
+authapi.route("/link/rfid/:empId/:rfidId").post(async (req, res) => {
+    const rfid = await Rfid.findOne(
         {where: {id: req.params.rfidId}}) as Rfid;
-    const varEmployee = await Employee.findOne(
+    const employee = await Employee.findOne(
         {where: {id: req.params.empId}}) as Employee;
-    if ((varEmployee !== undefined) && (varRfid !== undefined)) {
+    if ((employee !== undefined) && (rfid !== undefined)) {
         Auth.linkRFIDtoEmployee(req.params.empId, req.params.rfidId)
         .then((data) => {
-            res.end("Linkd RFID to Employee success!");
+            res.status(202).send("Linkd RFID to Employee success!");
         });
-    } else if (varEmployee === undefined) {
-        res.end("Employee Id does not exist !");
-    } else if (varRfid === undefined) {
-        res.end("RFID Id does not exist !");
+    } else if (employee === undefined) {
+        res.status(404).send("Employee Id does not exist !");
+    } else if (rfid === undefined) {
+        res.status(404).send("RFID Id does not exist !");
     } else {
-        res.end();
+        res.sendStatus(404);
     }
 });
 
-rfidapi.route("/remove/employee/:id").post(async (req, res) => {
-    const varEmployee = await Employee.findOne(
+authapi.route("/employee/:id").delete(async (req, res) => {
+    const employee = await Employee.findOne(
         {where: {id: req.params.id}}) as Employee;
-    if (varEmployee !== undefined) {
-        varEmployee.remove();
-        res.end("Remove success!");
+    if (employee !== undefined) {
+        employee.remove();
+        res.sendStatus(201);
     } else {
-        res.end("Employee does not exist!");
+        res.status(404).send("Employee does not exist!");
     }
 });
 
-rfidapi.route("/remove/rfid/:id").post(async (req, res) => {
-    const varRfid = await Rfid.findOne(
-        {where: {id: req.params.id}}) as Rfid;
-    if (varRfid !== undefined) {
-        varRfid.remove();
-        res.end("Remove success!");
+authapi.route("/rfid/:rfidcode").delete(async (req, res) => {
+    const rfid = await Rfid.findOne(
+        {where: {id: req.params.rfidcode}}) as Rfid;
+    if (rfid !== undefined) {
+        rfid.remove();
+        res.sendStatus(201);
     } else {
-        res.end("Employee does not exist!");
+        res.status(404).send("Rfid does not exist!");
     }
 });
