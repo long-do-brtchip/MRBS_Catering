@@ -7,9 +7,10 @@
     "start": "npm run build && npm run watch",
     "watch": "nodemon -e ts -w ./src -x npm run serve",
     "serve": "ts-node --inspect src/index.ts",
-    "build": "tsc --skipLibCheck && npm run tslint",
+    "build": "tsc --skipLibCheck && npm run tslint && npm run web",
     "tslint": "tslint -c tslint.json -p tsconfig.json",
-    "test": "NODE_ENV=test nyc mocha test/**/*.ts"
+    "test": "NODE_ENV=test nyc mocha test/**/*.ts",
+	"web": "cd web && [ ! -d node_modules ] && npm install; ng build"
   },
   "nyc": {
     "extension": [

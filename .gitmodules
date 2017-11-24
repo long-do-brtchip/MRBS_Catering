@@ -1,0 +1,4 @@
+[submodule "web"]
+	path = web
+	url = git@github.com:ftdichipsg/MRBS.git
+	branch = mgmtui
