@@ -42,10 +42,6 @@ const StructTimeline = StructType({
   count: ref.types.uint8,
 }, {packed: true});
 
-const StructGetMeetingInfo = StructType({
-  minutes: ref.types.uint16,
-}, {packed: true});
-
 const StructTime = StructType({
   dayOffset: ref.types.int8,
   minutesOfDay: ref.types.uint16,
@@ -148,9 +144,13 @@ export class MessageParser {
           this.getBody = true;
           break;
         case Incoming.GET_MEETING_INFO: {
-          [buf, next] = await this.waitBuf(next, StructGetMeetingInfo.size);
-          this.panlEvt.onGetMeetingInfo(this.path,
-            StructGetMeetingInfo(buf).minutes, this.getBody);
+          [buf, next] = await this.waitBuf(next, StructTime.size);
+          const when = StructTime(buf);
+          const point: ITimePoint = {
+            dayOffset: when.dayOffset,
+            minutesOfDay: when.minutesOfDay,
+          };
+          this.panlEvt.onGetMeetingInfo(this.path, point, this.getBody);
           this.getBody = false;
           break;
         }

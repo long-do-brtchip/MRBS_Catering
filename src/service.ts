@@ -24,7 +24,7 @@ export interface IPanLEvent {
   onPasscode(path: PanLPath, code: number): Promise<void>;
   onRFID(path: PanLPath, epc: Buffer): Promise<void>;
   onGetTimeline(path: PanLPath, req: ITimelineRequest): Promise<void>;
-  onGetMeetingInfo(path: PanLPath, minutesOfDay: number, getBody: boolean):
+  onGetMeetingInfo(path: PanLPath, id: ITimePoint, getBody: boolean):
   Promise<void>;
   onCreateBooking(path: PanLPath, id: ITimePoint, duration: number):
   Promise<void>;
@@ -170,13 +170,13 @@ export class PanLService implements IAgentEvent, IPanLEvent, ICalendarEvent {
   }
 
   public async onGetMeetingInfo(
-    path: PanLPath, minutesOfDay: number, getBody: boolean): Promise<void> {
+    path: PanLPath, id: ITimePoint, getBody: boolean): Promise<void> {
     if (getBody) {
       log.error("TODO: Parameter getBody not implemented.");
     }
     try {
       this.tx.send(path, MessageBuilder.buildMeetingInfo(
-        await this.cal.getMeetingInfo(path, minutesOfDay)));
+        await this.cal.getMeetingInfo(path, id)));
     } catch (err) {
       log.warn(`Not able to get meeting info for ${path}: ${err}`);
     }
@@ -339,13 +339,16 @@ export class PanLService implements IAgentEvent, IPanLEvent, ICalendarEvent {
           ...MessageBuilder.buildRoomName(name),
           ...MessageBuilder.buildTimeline(entries, 0),
           ...MessageBuilder.buildMeetingInfo(
-            await this.cal.getMeetingInfo(path, entries[0].start)),
+            await this.cal.getMeetingInfo(path, {
+              dayOffset: 0, minutesOfDay: entries[0].start})),
         ]);
       } else {
         // Send next meeting info too
         const info = await Promise.all([
-            this.cal.getMeetingInfo(path, entries[0].start),
-            this.cal.getMeetingInfo(path, entries[1].start),
+          this.cal.getMeetingInfo(path,
+            {dayOffset: 0, minutesOfDay: entries[0].start}),
+          this.cal.getMeetingInfo(path,
+            {dayOffset: 0, minutesOfDay: entries[1].start}),
         ]);
         this.tx.send(path, [
           ...MessageBuilder.buildRoomName(name),

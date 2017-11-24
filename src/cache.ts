@@ -225,18 +225,6 @@ export class Cache {
     this.client.flushdb();
   }
 
-  public async setDayOffset(path: PanLPath, dayOffset: number): Promise<void> {
-    await this.client.set(Cache.dayOffsetKey(path), dayOffset);
-  }
-
-  public async getDayOffset(path: PanLPath): Promise<number> {
-    const val = this.client.get(Cache.dayOffsetKey(path));
-    if (val === null) {
-      throw(new Error(`Can't find dayOffset`));
-    }
-    return val;
-  }
-
   public async setTimeline(path: PanLPath, dayOffset: number,
                            entries: ITimelineEntry[] | any[]): Promise<void> {
     const pipeline: redis.Pipeline = this.client.pipeline();

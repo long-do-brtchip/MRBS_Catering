@@ -68,7 +68,6 @@ export class CalendarManager implements ICalendarNotification {
 
   public async getTimeline(path: PanLPath, req: ITimelineRequest):
   Promise<ITimelineEntry[]> {
-    await this.cache.setDayOffset(path, req.id.dayOffset);
     let entries = await this.cache.getTimeline(path, req);
     if (entries === undefined) {
       // get timeline from External server and cached
@@ -80,10 +79,8 @@ export class CalendarManager implements ICalendarNotification {
     return entries;
   }
 
-  public async getMeetingInfo(path: PanLPath, minutesOfDay: number):
+  public async getMeetingInfo(path: PanLPath, id: ITimePoint):
   Promise<IMeetingInfo> {
-    const dayOffset: number = await this.cache.getDayOffset(path);
-    const id: ITimePoint = { dayOffset, minutesOfDay };
     return this.cache.getMeetingInfo(path, id);
   }
 
