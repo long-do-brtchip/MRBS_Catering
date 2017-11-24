@@ -21,7 +21,7 @@ async function createRoom(address: string, name: string): Promise<boolean> {
 }
 
 api.route("/rooms").get(async (req, res) => {
-  const links = await Room.find();
+  const links = await Link.find();
   return res.json(links);
 }).post(async (req, res) => {
   if (req.body.address === undefined || req.body.name === undefined) {

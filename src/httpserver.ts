@@ -11,7 +11,7 @@ export class HttpServer {
       HttpServer.instance.addRef();
     } else {
       HttpServer.instance = new HttpServer(
-        process.env.NODE_ENV === "production" ? 80 : 8081);
+        process.env.NODE_ENV === "production" ? 80 : 8080);
     }
     return HttpServer.instance;
   }
@@ -25,7 +25,7 @@ export class HttpServer {
     this.app.use(express.urlencoded({extended: true}));
     this.app.use(express.json());
     this.app.use("/api", api);
-    this.app.use("/rfidapi", rfidapi);
+    this.app.use("/rfidapi", authapi);
     this.app.use(express.static("web/dist"));
     this.app.get("/", (req, res) => {
       res.sendFile(path.resolve("web/dist/index.html"));
