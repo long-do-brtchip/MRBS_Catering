@@ -120,7 +120,9 @@ ID                             | Parameters                    | Description
 int8_t day_offset;
 struct {
   unsigned int start_time : 11;
-  unsigned int reserved : 4;
+  /* local time is >= 12:00 < 00:00 */
+  unsigned int pm_now: 1;
+  unsigned int reserved: 3;
   unsigned int look_forward : 1;
 };
 uint8_t max_count;
@@ -129,6 +131,11 @@ uint8_t max_count;
 ### TimePoint
 ```c
   int8_t day_offset;
+  struct {
+    unsigned int start_time : 11;
+    unsigned int pm_now: 1;
+    unsigned int reserved: 4;
+  };
   uint16_t start_time;
 ```
 
@@ -209,6 +216,7 @@ struct {
 uint8_t day_offset;
 uint8_t count;
 struct {
+  // Bit 11 of first start_time will be set if the message was prepared in the afternoon
   uint16_t start_time;
   uint16_t end_time;
 } busy[count];
