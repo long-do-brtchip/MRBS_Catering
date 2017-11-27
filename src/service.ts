@@ -1,3 +1,4 @@
+import moment = require("moment");
 import {Auth} from "./auth";
 import {ErrorCode, MessageBuilder} from "./builder";
 import {Cache} from "./cache";
@@ -75,6 +76,7 @@ export class PanLService implements IAgentEvent, IPanLEvent, ICalendarEvent {
     this.tx = new Transmit(this, this);
     this.cal = new CalendarManager(PanLService.cache, this, hub, panl);
     this.cal.connect();
+    this.setupNewDayTask();
   }
 
   public async stop(): Promise<void> {
@@ -97,7 +99,7 @@ export class PanLService implements IAgentEvent, IPanLEvent, ICalendarEvent {
   public async onCalMgrError(err: Error): Promise<void> {
     log.error(`Failed to start Calendar Manager ${err},` +
       `will try again in 30seconds`);
-    setTimeout(this.cal.connect, 30 * 1000);
+    setTimeout(this.cal.connect.bind(this.cal), 30 * 1000);
   }
 
   public async onAgentEnd(id: number): Promise<void> {
@@ -379,6 +381,16 @@ export class PanLService implements IAgentEvent, IPanLEvent, ICalendarEvent {
       return;
     }
     await PanLService.cache.setAuthSuccess(path, email);
+  }
+
+  private onNewDayTask(): void {
+    this.tx.broadcastToAllImmediately([MessageBuilder.buildTime()]);
+    this.setupNewDayTask();
+  }
+
+  private setupNewDayTask(): void {
+    const now = moment();
+    setTimeout(this.onNewDayTask.bind(this), moment().endOf("day").diff(now));
   }
 
   private addRef(): void {
