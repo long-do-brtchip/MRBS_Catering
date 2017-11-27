@@ -1,9 +1,7 @@
+import moment = require("moment");
 import {ErrorCode} from "./builder";
 import {Cache} from "./cache";
-import {
-  ICalendar, ICalendarNotification,
-  ITimelineEntry, ITimePoint,
-} from "./calendar";
+import {ICalendar, ICalendarNotification, ITimelineEntry} from "./calendar";
 import {PanLPath} from "./path";
 import {IHubConfig} from "./persist";
 
@@ -13,82 +11,86 @@ export class MockupCalendar implements ICalendar {
               private configHub: IHubConfig) {
   }
 
-  public async getTimeline(path: PanLPath, dayOffset: number)
+  public async getTimeline(room: string, id: number)
   : Promise<boolean> {
+    const dayStart = moment(id).startOf("day");
     const entries: ITimelineEntry[] = [
-      {start: 60 * 8, end: 60 * 9},
-      {start: 60 * 18, end: 60 * 23},
+      {start: dayStart.hour(8).valueOf(), end: dayStart.hour(9).valueOf()},
+      {start: dayStart.hour(18).valueOf(), end: dayStart.hour(23).valueOf()},
     ];
 
-    await Promise.all(entries.map((entry) => {
-      const point: ITimePoint = {dayOffset, minutesOfDay: entry.start};
-      return [
-        this.cache.setMeetingInfo(path, point,
-          {subject: `Test meeting ${dayOffset}`, organizer: "Tester"}),
-      ];
-    }));
-    this.cache.setTimeline(path, dayOffset, entries);
+    await Promise.all(entries.map((entry) => [
+        this.cache.setMeetingInfo(room, entry.start, {
+          subject: `Test meeting ${moment(entry.start).calendar()}`,
+          organizer: "Tester",
+        })]));
+    await this.cache.setTimeline(room, id, entries);
     return true;
   }
 
-  public async createBooking(path: PanLPath, id: ITimePoint, duration: number,
+  public async createBooking(room: string, entry: ITimelineEntry,
                              email: string): Promise<ErrorCode> {
     const organizer = email ? email : "PanL";
     await Promise.all([
-      this.cache.setTimelineEntry(path, id, duration),
-      this.cache.setMeetingInfo(path, id, {
+      this.cache.setTimelineEntry(room, entry),
+      this.cache.setMeetingInfo(room, entry.start, {
         subject: this.configHub.meetingSubject,
         organizer,
       }),
     ]);
-    await this.notify.onAddNotification(path, id, duration);
+    await this.notify.onAddNotification(room, entry);
     return ErrorCode.ERROR_SUCCESS;
   }
 
-  public async extendMeeting(path: PanLPath, id: ITimePoint, duration: number,
+  public async extendMeeting(room: string, entry: ITimelineEntry,
                              email: string): Promise<ErrorCode> {
-    const info = await this.cache.getMeetingInfo(path, id);
+    const info = await this.cache.getMeetingInfo(room, entry.start);
     info.subject = email ? `Extended by ${email}: ${info.subject}` :
                    `Extended: ${info.subject}`;
     await Promise.all([
-      this.cache.setTimelineEntry(path, id, duration),
-      this.cache.setMeetingInfo(path, id, info),
+      this.cache.setTimelineEntry(room, entry),
+      this.cache.setMeetingInfo(room, entry.start, info),
     ]);
-    await this.notify.onEndTimeChangeNofication(path, id, duration);
+    await this.notify.onEndTimeChangeNofication(room, entry);
     return ErrorCode.ERROR_SUCCESS;
   }
 
-  public async endMeeting(path: PanLPath, id: ITimePoint, email: string):
+  public async endMeeting(room: string, id: number, email: string):
   Promise<ErrorCode> {
-    const info = await this.cache.getMeetingInfo(path, id);
+    const entry: ITimelineEntry = {
+      start: id,
+      end: moment().valueOf(),
+    };
+    const info = await this.cache.getMeetingInfo(room, id);
     info.subject = email ? `Ended by ${email}: ${info.subject}` :
                    `Ended: ${info.subject}`;
-    const date = new Date();
-    const duration = date.getHours() * 60 + date.getMinutes() -
-      id.minutesOfDay;
     await Promise.all([
-      this.cache.setTimelineEntry(path, id, duration),
-      this.cache.setMeetingInfo(path, id, info),
+      this.cache.setTimelineEntry(room, entry),
+      this.cache.setMeetingInfo(room, id, info),
     ]);
-    await this.notify.onEndTimeChangeNofication(path, id, duration);
+    await this.notify.onEndTimeChangeNofication(room, entry);
     return ErrorCode.ERROR_SUCCESS;
   }
 
-  public async cancelMeeting(path: PanLPath, id: ITimePoint, email: string):
+  public async cancelMeeting(room: string, id: number, email: string):
   Promise<ErrorCode> {
-    await this.cache.removeTimelineEntry(path, id);
-    await this.notify.onDeleteNotification(path, id);
+    await this.cache.removeTimelineEntry(room, id);
+    await this.notify.onDeleteNotification(room, id);
     return ErrorCode.ERROR_SUCCESS;
   }
 
-  public async cancelUnclaimedMeeting(path: PanLPath, id: ITimePoint):
+  public async cancelUnclaimedMeeting(room: string, id: number):
   Promise<ErrorCode> {
-    return this.cancelMeeting(path, id, "");
+    return this.cancelMeeting(room, id, "");
   }
 
-  public async isAttendeeInMeeting(path: PanLPath, id: ITimePoint,
+  public async isAttendeeInMeeting(room: string, id: number,
                                    email: string): Promise<boolean> {
     const attendees = ["passcode@test.com", "rfid@test.com"];
     return -1 !== attendees.indexOf(email);
+  }
+
+  public async disconnect(): Promise<void> {
+    return;
   }
 }

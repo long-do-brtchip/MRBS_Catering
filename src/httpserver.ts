@@ -15,7 +15,7 @@ export class HttpServer {
     return HttpServer.instance;
   }
 
-  private static instance: HttpServer | undefined;
+  private static instance: HttpServer;
   private app: express.Application;
   private server: Server;
 
@@ -37,7 +37,7 @@ export class HttpServer {
   public stop(): void {
     if (--this.refCnt === 0) {
       this.server.close();
-      HttpServer.instance = undefined;
+      delete HttpServer.instance;
     }
   }
 

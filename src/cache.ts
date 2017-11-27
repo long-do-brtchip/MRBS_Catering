@@ -1,23 +1,17 @@
 import * as redis from "ioredis";
-import {ErrorCode} from "./builder";
-import {
-  IMeetingInfo, ITimelineEntry,
-  ITimelineRequest, ITimePoint,
-} from "./calendar";
+import moment = require("moment");
+import {IMeetingInfo, ITimelineEntry, ITimelineRequest} from "./calendar";
 import {Database} from "./database";
 import {Room} from "./entity/hub/room";
-import {IEwsCache} from "./ews";
-import {HubError} from "./huberror";
 import {log} from "./log";
 import {PanLPath} from "./path";
 import {Persist} from "./persist";
-import {Time} from "./time";
 
 declare type PendingHandler = (path: PanLPath) => void;
 
 export class Cache {
   public static async getInstance(): Promise<Cache> {
-    if (Cache.instance !== undefined) {
+    if (Cache.instance) {
       Cache.instance.addRef();
       return Cache.instance;
     }
@@ -25,7 +19,7 @@ export class Cache {
     return new Promise<Cache>((resolve, reject) => {
       const client = new redis();
       client.on("ready", async () => {
-        log.verbose("Redis connection creted");
+        log.verbose("Redis connection created");
         client.set(Cache.SEQUENCE_KEY, 0);
         const db = await Database.getInstance();
         const config = await Persist.getHubConfig();
@@ -52,15 +46,16 @@ export class Cache {
     });
   }
 
-  private static instance: Cache | undefined;
+  private static instance: Cache;
 
-  private static readonly SEQUENCE_KEY: string = "sequence";
-  private static readonly PENDING_KEY: string = "pending";
+  private static readonly SEQUENCE_KEY = "sequence";
+  private static readonly PENDING_KEY = "pending";
+  private static readonly MEETINGUID_KEY = "meetingid";
+  private static readonly ROOMNAME_KEY = "roomname:";
+  private static readonly PANLS_SUFFIX = ":panls";
   private static readonly SHADOW_PREFIX = "shadow:";
-  private static readonly TIMELINE_PREFIX = "timeline";
-  private static readonly MEETING_PREFIX = "meeting";
-  private static readonly MEETINGID_PREFIX = "meeting_id";
-  private static readonly PATH_MEETINGID_PREFIX = "path-meeting_id";
+  private static readonly TIMELINE_PREFIX = "timeline:";
+  private static readonly MEETING_PREFIX = "meeting:";
 
   private static pathToIdKey(path: PanLPath): string {
     return `path-id:${path.uid}`;
@@ -78,57 +73,32 @@ export class Cache {
     return `address:${path.uid}`;
   }
 
-  private static nameKey(path: PanLPath): string {
-    return `name:${path.uid}`;
-  }
-
   private static agentKey(agent: number): string {
     return `agent:${agent}`;
   }
 
-  private static dayOffsetKey(path: PanLPath): string {
-    return `day_offset:${path.uid}`;
+  private static windowKey(path: PanLPath): string {
+    return `window:${path.uid}`;
   }
 
   private static authKey(path: PanLPath): string {
-    return `auth:${path}`;
+    return `auth:${path.uid}`;
   }
 
-  private static meetingUID(path: PanLPath, id: ITimePoint): string {
-    const dateStr = Time.dayOffsetToString(id.dayOffset);
-    return `:${path.uid}:${dateStr}:${id.minutesOfDay}`;
+  private static roomDateKey(addr: string, id: number): string {
+    const mmt = moment(id);
+    const date = mmt.format("YYYYMMDD");
+    return `${addr}:${date}`;
   }
 
-  private static hashMeetingKey(path: PanLPath, id: ITimePoint):
-  string {
-    return Cache.MEETING_PREFIX + Cache.meetingUID(path, id);
+  private static getMeetingTime(id: number): string {
+    return moment(id).format("HHmm");
   }
-
-  private static hashMeetingIdKey(path: PanLPath, id: ITimePoint):
-  string {
-    return Cache.MEETINGID_PREFIX + Cache.meetingUID(path, id);
-  }
-
-  private static hashTimelineKey(path: PanLPath, id: ITimePoint):
-  string {
-    return Cache.TIMELINE_PREFIX + Cache.meetingUID(path, id);
-  }
-
-  private static pathToMeetingIdKey(path: PanLPath, id: ITimePoint):
-  string {
-    return Cache.PATH_MEETINGID_PREFIX + Cache.meetingUID(path, id);
-  }
-
-  private static meetingIdToPathKey(meetingId: string):
-  string {
-    return `meeting_id-path:${meetingId}`;
-  }
-
-  private expiry = 0;
 
   private constructor(private client: redis.Redis,
                       private observer: redis.Redis,
-                      private refCnt = 1) {
+                      private refCnt = 1,
+                      private expiry = 0) {
     this.setOnKeyExpired();
   }
 
@@ -137,8 +107,12 @@ export class Cache {
       log.silly("Close redis connection");
       await this.observer.quit();
       await this.client.quit();
-      Cache.instance = undefined;
+      delete Cache.instance;
     }
+  }
+
+  public setExpiry(val: number): void {
+    this.expiry = val;
   }
 
   public async addPending(path: PanLPath): Promise<void> {
@@ -166,9 +140,10 @@ export class Cache {
       this.client.del(Cache.idToUuidKey(id));
     }
     await Promise.all([
-      this.client.set(Cache.nameKey(path), room.name),
+      this.client.set(Cache.ROOMNAME_KEY + room.address, room.name),
       this.client.set(Cache.addressKey(path), room.address),
       this.client.sadd(Cache.agentKey(path.agent), path.dest),
+      this.client.sadd(room.address + Cache.PANLS_SUFFIX, JSON.stringify(path)),
     ]);
   }
 
@@ -202,23 +177,23 @@ export class Cache {
   }
 
   public async removeAgent(agent: number): Promise<void> {
+    const pipeline: redis.Pipeline = this.client.pipeline();
     const m = await this.client.smembers(Cache.agentKey(agent));
-    await Promise.all(m.map(async (v: string) => {
+    for (const v of m) {
       const path = new PanLPath(agent, Number(v));
-      await Promise.all([
-        this.client.srem(Cache.PENDING_KEY, path),
-        this.client.del(Cache.nameKey(path)),
-        this.client.del(Cache.addressKey(path)),
-      ]);
-    }));
-    await this.client.del(Cache.agentKey(agent));
+      const room = await this.getRoomAddress(path);
+      pipeline.srem(room + Cache.PANLS_SUFFIX, JSON.stringify(path));
+      pipeline.srem(Cache.PENDING_KEY, path);
+      pipeline.del(Cache.ROOMNAME_KEY + await this.getRoomAddress(path));
+      pipeline.del(Cache.addressKey(path));
+    }
+    await pipeline.del(Cache.agentKey(agent)).exec();
   }
 
-  public async getRoomName(path: PanLPath): Promise<string> {
-    const val = await this.client.get(Cache.nameKey(path));
+  public async getRoomName(room: string): Promise<string> {
+    const val = await this.client.get(Cache.ROOMNAME_KEY + room);
     if (val === null) {
-      throw(new HubError(`Can't find room name for ${path}`,
-        ErrorCode.ERROR_CACHE_ROOMNAME_NOT_FOUND));
+      throw(new Error(`Can't find room name for ${room}`));
     }
     return val;
   }
@@ -226,8 +201,7 @@ export class Cache {
   public async getRoomAddress(path: PanLPath): Promise<string> {
     const val = await this.client.get(Cache.addressKey(path));
     if (val === null) {
-      throw(new HubError(`Can't find room address for ${path}`,
-        ErrorCode.ERROR_CACHE_ROOMADDRESS_NOT_FOUND));
+      throw(new Error(`Can't find room address for ${path}`));
     }
     return val;
   }
@@ -236,189 +210,163 @@ export class Cache {
     this.client.flushdb();
   }
 
-  public async setDayOffset(path: PanLPath, dayOffset: number): Promise<void> {
-    await this.client.set(Cache.dayOffsetKey(path), dayOffset);
+  public async setTimelineWindow(path: PanLPath, id: number): Promise<void> {
+    await this.client.set(Cache.windowKey(path), id);
   }
 
-  public async getDayOffset(path: PanLPath): Promise<number> {
-    const val = this.client.get(Cache.dayOffsetKey(path));
+  public async getTimelineWindow(path: PanLPath): Promise<number> {
+    const val = this.client.get(Cache.windowKey(path));
     if (val === null) {
       return 0;
     }
     return Number(val);
   }
 
-  public async setTimeline(path: PanLPath, dayOffset: number,
-                           entries: ITimelineEntry[] | any[]): Promise<void> {
-    const pipeline: redis.Pipeline = this.client.pipeline();
-    const expiry: number = (dayOffset === 0) ?
-      Time.restDaySeconds() : this.expiry;
-
-    for (const entry of entries) {
-      // create pattern key
-      const point: ITimePoint = {
-        dayOffset,
-        minutesOfDay: entry.start,
-      };
-      const timelineKeys = Cache.hashTimelineKey(path, point);
-      const shadowKey = Cache.SHADOW_PREFIX + timelineKeys;
-      // save hash timeline
-      pipeline.hmset(timelineKeys, entry);
-      pipeline.set(shadowKey, "");
-      pipeline.expire(shadowKey, expiry);
+  public async getRoomPanLs(room: string): Promise<PanLPath[]> {
+    const panls = await this.client.get(room + Cache.PANLS_SUFFIX);
+    const paths: PanLPath[] = [];
+    for (const panl of panls) {
+      const t = JSON.parse(panl);
+      paths.push(new PanLPath(t.agentID, t.mstpAddress));
     }
-
-    // execute all command async
-    await pipeline.exec();
+    return paths;
   }
 
-  public async getTimeline(path: PanLPath, req: ITimelineRequest):
+  public async setTimeline(room: string, id: number,
+                           entries: ITimelineEntry[]):
+  Promise<void> {
+    const key = Cache.TIMELINE_PREFIX + Cache.roomDateKey(room, id);
+
+    const pipeline: redis.Pipeline = this.client.pipeline();
+    for (const entry of entries) {
+      pipeline.zadd(key, entry.start, entry.end);
+    }
+    await Promise.all([
+      pipeline.exec(),
+      this.setShadowKey(room, id),
+    ]);
+  }
+
+  public async getTimeline(room: string, req: ITimelineRequest):
   Promise<ITimelineEntry[] | undefined> {
     // return undefined is never been cached
     // return zero length array if no meeting
-    let result: ITimelineEntry[] = [];
-    const dayStr: string = Time.dayOffsetToString(req.id.dayOffset);
-    const keyFullDay: string[] = await this.scan(
-      `${Cache.TIMELINE_PREFIX}:${path.uid}:${dayStr}:*`);
+    const entries: ITimelineEntry[] = [];
+    const roomDate = Cache.roomDateKey(room, req.id);
+    const key = Cache.TIMELINE_PREFIX + roomDate;
+    const shadowKey = Cache.SHADOW_PREFIX + roomDate;
 
-    if (!keyFullDay || !keyFullDay.length) {
-      return;
+    if (req.maxCount === 0) {
+      req.maxCount = 255;
+    }
+    if (!await this.client.exists(shadowKey)) {
+      return undefined;
+    }
+    if (req.lookForward) {
+      const ret = await this.client.zrangebyscore(key, req.id, "+inf",
+        "WITHSCORES", "LIMIT", 0, req.maxCount);
+      for (let i = 0; i < ret.length; i += 2) {
+        entries.push({start: Number(ret[i + 1]), end: Number(ret[i])});
+      }
+    } else {
+      const ret = await this.client.zrevrangebyscore(key, `(${req.id}`, "-inf",
+        "WITHSCORES", "LIMIT", 0, req.maxCount);
+      for (let i = 0; i < ret.length; i += 2) {
+        entries.unshift({start: Number(ret[i + 1]), end: Number(ret[i])});
+      }
     }
 
-    const keys: string[] = Time.filterTimeLineKeys(keyFullDay, req);
-    if (!keys || !keys.length) {
-      return result;
-    }
+    this.setShadowKey(room, req.id);
+    return entries;
+  }
 
+  public async isTimelineCachedForDay(room: string, id: number):
+  Promise<boolean> {
+    const roomDate = Cache.roomDateKey(room, id);
+    const shadowKey = Cache.SHADOW_PREFIX + roomDate;
+    return this.client.exists(shadowKey);
+  }
+
+  public async setTimelineEntry(room: string, entry: ITimelineEntry) {
     const pipeline: redis.Pipeline = this.client.pipeline();
-    for (const key of keys) {
-      pipeline.hgetall(key);
-    }
-    // [[error, ITimelineEntry], [error, ITimelineEntry]]
-    const response: any[][] = await pipeline.exec();
-
-    result = response.map((val) => {
-      return {
-        start: parseInt(val[1].start, 10),
-        end: parseInt(val[1].end, 10),
-      };
-    });
-
-    // update expiry time of full day
-    this.updateTimelineExpiryTime(path, req.id.dayOffset);
-
-    return result;
+    const key = Cache.TIMELINE_PREFIX + Cache.roomDateKey(room, entry.start);
+    const del = pipeline.zremrangebyscore(key, entry.start, entry.start);
+    await pipeline.zadd(key, entry.start, entry.end).exec();
   }
 
-  public async setTimelineEntry(path: PanLPath, id: ITimePoint,
-                                duration: number) {
-    const key: string = Cache.hashTimelineKey(path, id);
-    const shadowKey: string = Cache.SHADOW_PREFIX + key;
-
-    const timelineEntry = {
-      start: id.minutesOfDay,
-      end: id.minutesOfDay + duration,
-    };
-
-    const expiry = id.dayOffset === 0 ? Time.restDaySeconds() : this.expiry;
-    await Promise.all([
-      this.client.hmset(key, timelineEntry),
-      this.client.set(shadowKey, ""),
-      this.client.expire(shadowKey, expiry),
-    ]);
+  public async getTimelineEntryEndTime(room: string, id: number):
+  Promise<number | undefined> {
+    const roomDate = Cache.roomDateKey(room, id);
+    const key = Cache.TIMELINE_PREFIX + roomDate;
+    const ret = await this.client.zrangebyscore(key, id, id);
+    return ret.length ? Number(ret[0]) : undefined;
   }
 
-  public async getTimelineEntry(path: PanLPath, id: ITimePoint):
-  Promise<ITimelineEntry> {
-    const key: string = Cache.hashTimelineKey(path, id);
-    const result = await this.client.hgetall(key);
-    if (!result || Object.keys(result).length === 0) {
-      throw(new HubError("Timeline entry not found",
-          ErrorCode.ERROR_CACHE_TIMELINE_ENTRY_NOT_FOUND));
-    }
-    result.start = parseInt(result.start, 10);
-    result.end = parseInt(result.end, 10);
-
-    return result;
-  }
-
-  public async removeTimelineEntry(path: PanLPath, id: ITimePoint):
+  public async removeTimelineEntry(room: string, id: number):
   Promise<void> {
-    const uid = Cache.meetingUID(path, id);
-    const shadowKey = Cache.SHADOW_PREFIX + Cache.hashTimelineKey(path, id);
-    await Promise.all([
-      this.client.del(shadowKey),
-      this.removeTimelineEntryAndRelatedInfo(uid),
-      ]);
+    const roomDateKey = Cache.roomDateKey(room, id);
+    // Remove for timeline
+    const key = Cache.TIMELINE_PREFIX + roomDateKey;
+    this.client.zremrangebyscore(key, id, id);
+    // Remove meeting info
+    this.client.del(Cache.MEETING_PREFIX + roomDateKey +
+      Cache.getMeetingTime(id));
+    // Remove meeting UID
+    try {
+      const uid = await this.getMeetingUid(room, id);
+      await this.client.zrem(Cache.MEETINGUID_KEY, uid);
+      await this.client.zrem(`${Cache.MEETINGUID_KEY}:${room}`, uid);
+    } catch (err) {
+      log.debug(`Not able to find UID for ${roomDateKey}`);
+    }
   }
 
-  public async setMeetingInfo(path: PanLPath, id: ITimePoint,
-                              info: IMeetingInfo): Promise<void> {
-    const key: string = Cache.hashMeetingKey(path, id);
+  public async setMeetingInfo(room: string, id: number, info: IMeetingInfo):
+  Promise<void> {
+    const key = Cache.MEETING_PREFIX + Cache.roomDateKey(room, id) +
+      ":" + Cache.getMeetingTime(id);
     await this.client.hmset(key, info);
   }
 
-  public async getMeetingInfo(path: PanLPath, id: ITimePoint):
+  public async getMeetingInfo(room: string, id: number):
   Promise<IMeetingInfo> {
-    const key = Cache.hashMeetingKey(path, id);
+    const key = Cache.MEETING_PREFIX + Cache.roomDateKey(room, id) +
+      ":" + Cache.getMeetingTime(id);
     const result: IMeetingInfo = await this.client.hgetall(key);
     if (!result || Object.keys(result).length === 0) {
-      throw(new HubError("Meeting info not found",
-        ErrorCode.ERROR_CACHE_MEETINGINFO_NOT_FOUND));
+      throw new Error("Meeting info not found");
     }
-
     return result;
   }
 
-  public async getMeetingId(path: PanLPath, id: ITimePoint):
-  Promise<string> {
-    const key = Cache.hashMeetingIdKey(path, id);
-    const result: string = await this.client.get(key);
-    if (!result) {
-      throw(new HubError("Meeting Id not found",
-        ErrorCode.ERROR_CACHE_MEETINGID_NOT_FOUND));
-    }
-
-    return result;
-  }
-
-  public async setMeetingId(path: PanLPath, id: ITimePoint, meetingId: string):
+  public async setMeetingUid(room: string, id: number, meetingId: string):
   Promise<void> {
-    const key = Cache.hashMeetingIdKey(path, id);
-    await this.client.set(key, meetingId);
-    const pathKey = Cache.pathToMeetingIdKey(path, id);
-    const meetingIdkey = Cache.meetingIdToPathKey(meetingId);
-    const dayOffsetStr = Time.dayOffsetToString(id.dayOffset);
-
-    // save path-meeting and meeting-path
-    await Promise.all([
-      this.client.set(pathKey, meetingId),
-      this.client.hmset(meetingIdkey, {
-        dayOffsetStr,
-        minutesOfDay: id.minutesOfDay,
-        agentID: path.agent,
-        mstpAddress: path.dest,
-      }),
-    ]);
+    const pipeline: redis.Pipeline = this.client.pipeline();
+    // For getMeetingRoomFromUid
+    pipeline.zadd(Cache.MEETINGUID_KEY, room, meetingId);
+    // For getMeetingUid
+    const key = `${Cache.MEETINGUID_KEY}:${room}`;
+    pipeline.zadd(key, id, meetingId);
+    await pipeline.exec();
   }
 
-  public async getEwsCacheByMeetingId(meetingId: string):
-  Promise<IEwsCache> {
-    const result =
-      await this.client.hgetall(Cache.meetingIdToPathKey(meetingId));
-    if (!result || Object.keys(result).length === 0) {
-      throw(new HubError("ews cache not found",
-        ErrorCode.ERROR_CACHE_EWS_NOT_FOUND));
+  public async getMeetingUid(room: string, id: number): Promise<string> {
+    const key = `${Cache.MEETINGUID_KEY}:${room}`;
+    const ret = await this.client.zrangebyscore(key, id, id, "LIMIT", 0, 1);
+    if (ret.length === 0) {
+      throw(new Error("Meeting Id not found"));
     }
-
-    result.minutesOfDay = parseInt(result.minutesOfDay, 10);
-    result.agentID = parseInt(result.agentID, 10);
-    result.mstpAddress = parseInt(result.mstpAddress, 10);
-    return result;
+    return ret[0];
   }
 
-  public setExpiry(val: number): void {
-    this.expiry = val;
+  public async getMeetingStartFromUid(room: string, uid: string):
+  Promise<number> {
+    return Number(
+      await this.client.zscore(`${Cache.MEETINGUID_KEY}:${room}`, uid));
+  }
+
+  public async getMeetingRoomFromUid(uid: string): Promise<string> {
+    return this.client.zscore(Cache.MEETINGUID_KEY, uid);
   }
 
   public async setAuthSuccess(path: PanLPath, email: string): Promise<void> {
@@ -428,7 +376,7 @@ export class Cache {
   public async getAuth(path: PanLPath): Promise<string> {
     const key = Cache.authKey(path);
     if (await this.client.exists(key)) {
-      const email = await this.client.get(key);
+      const email = this.client.get(key);
       await this.client.del(key);
       return email;
     } else {
@@ -436,74 +384,52 @@ export class Cache {
     }
   }
 
-  private scan(pattern: string): Promise<string[]> {
-    const self = this.client;
-    return new Promise((resolve) => {
-      const stream = self.scanStream({
-        // only returns keys following the pattern of `user:*`
-        match: pattern,
-        // returns approximately 100 elements per call2
-        count: 100,
-      });
-
-      const keys: string[] = [];
-      stream.on("data", (resultKeys) => {
-        // `resultKeys` is an array of strings representing key names
-        for (const val of resultKeys) {
-          keys.push(val);
-        }
-      });
-
-      stream.on("end", () => {
-        resolve(keys);
-      });
+  private setOnKeyExpired() {
+    const starts = (Cache.SHADOW_PREFIX).length;
+    this.observer.on("pmessage",  (pattern, channel, key) => {
+      const roomDate = key.slice(starts);
+      if (!roomDate) {
+        return;
+      }
+      log.debug("expired: " + roomDate);
+      this.removeTimelineEntriesAndRelatedInfo(roomDate);
     });
   }
 
-  private async updateTimelineExpiryTime(path: PanLPath, dayOffset: number):
+  private async removeTimelineEntriesAndRelatedInfo(roomDateKey: string):
   Promise<void> {
-    // not today will update cache
-    if (dayOffset === 0) {
-      return;
-    }
-    const dayStr: string = Time.dayOffsetToString(dayOffset);
-    // Meetings corresponding to a timeline shall be purged out
-    const shadowKey: string[] = await this.scan(Cache.SHADOW_PREFIX +
-      `${Cache.TIMELINE_PREFIX}:${path.uid}:${dayStr}:*`);
-
     const pipeline: redis.Pipeline = this.client.pipeline();
-    if (shadowKey && shadowKey.length) {
-      for (const key of shadowKey) {
-        pipeline.expire(key, this.expiry);
+    // Remove timeline
+    pipeline.del(Cache.TIMELINE_PREFIX + roomDateKey);
+    // Remove meeting info
+    const keys = await this.client.keys(
+      Cache.MEETING_PREFIX + roomDateKey + "*");
+    for (const i of keys) {
+      pipeline.del(i);
+    }
+    // Remove meeting UID
+    const [room, date] = roomDateKey.split(":");
+    const start = moment(date);
+    const uids = await this.client.zremrangebyscore(
+      `${Cache.MEETINGUID_KEY}:${room}`,
+      start.valueOf(), start.endOf("day").valueOf());
+    if (uids) {
+      for (const uid of uids) {
+        pipeline.zrem(Cache.MEETINGUID_KEY, uid);
       }
     }
-
-    // execute all command
+    pipeline.del(`${Cache.MEETINGUID_KEY}:${roomDateKey}`);
     await pipeline.exec();
   }
 
-  private setOnKeyExpired() {
-    const starts = (Cache.SHADOW_PREFIX + Cache.TIMELINE_PREFIX).length;
-    this.observer.on("pmessage",  (pattern, channel, key) => {
-      const uid = key.slice(starts);
-      if (!uid) {
-        return;
-      }
-      log.debug("expired: ", uid);
-      this.removeTimelineEntryAndRelatedInfo(uid);
-    });
-  }
-
-  private async removeTimelineEntryAndRelatedInfo(uid: string): Promise<void> {
-    const meetingId = await this.client.get(Cache.PATH_MEETINGID_PREFIX + uid);
-
-    await Promise.all([
-      this.client.del(Cache.MEETINGID_PREFIX + uid),
-      this.client.del(Cache.MEETING_PREFIX + uid),
-      this.client.del(Cache.TIMELINE_PREFIX + uid),
-      this.client.del(Cache.PATH_MEETINGID_PREFIX + uid),
-      this.client.del(Cache.meetingIdToPathKey(meetingId)),
-    ]);
+  private async setShadowKey(room: string, id: number): Promise<void> {
+    const req = moment(id);
+    const now = moment();
+    const expiry = req.isSame(now, "day") ?
+      now.clone().endOf("day").diff(now, "seconds") : this.expiry;
+    const shadowKey = Cache.SHADOW_PREFIX + `${Cache.roomDateKey(room, id)}`;
+    await this.client.pipeline().set(shadowKey, "").
+      expire(shadowKey, expiry).exec();
   }
 
   private addRef(): void {

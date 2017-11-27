@@ -1,9 +1,15 @@
 import {assert, expect, use} from "chai";
 import chaiAsPromised = require("chai-as-promised");
+import moment = require("moment");
 import {Cache} from "../../src/cache";
+import {ITimelineEntry} from "../../src/calendar";
 import {Room} from "../../src/entity/hub/room";
+import {log} from "../../src/log";
 import {PanLPath} from "../../src/path";
-import {sleep} from "../../utils/testUtil";
+
+async function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
 
 describe("Cache module", () => {
   let cache: Cache;
@@ -70,31 +76,34 @@ describe("Cache module", () => {
       }
     });
   });
-  const path1 = new PanLPath(1, 1);
-  const path2 = new PanLPath(1, 2);
+
+  const room = "test1@ftdi.local";
   describe("Configured ID", () => {
+    const room2 = "test2@ftdi.local";
+    const path1 = new PanLPath(1, 1);
+    const path2 = new PanLPath(1, 2);
     it("should linked to room name and address", async () => {
       const path4 = new PanLPath(1, 4);
       await cache.addUnconfigured(path1,
         new Buffer([0x04, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08]));
       await cache.addConfigured(path1,
-        new Room("test1@ftdi.local", "Test Room 1"));
+        new Room(room, "Test Room 1"));
       await cache.addConfigured(path2,
-        new Room("test2@ftdi.local", "Test Room 2"));
+        new Room(room2, "Test Room 2"));
       await cache.addConfigured(path4,
         new Room("test4@ftdi.local", "Test Room 4"));
-      expect(await cache.getRoomAddress(path1)).equal("test1@ftdi.local");
-      expect(await cache.getRoomAddress(path2)).equal("test2@ftdi.local");
-      expect(await cache.getRoomName(path1)).equal("Test Room 1");
-      expect(await cache.getRoomName(path2)).equal("Test Room 2");
+      expect(await cache.getRoomAddress(path1)).equal(room);
+      expect(await cache.getRoomAddress(path2)).equal(room2);
+      expect(await cache.getRoomName(room)).equal("Test Room 1");
+      expect(await cache.getRoomName(room2)).equal("Test Room 2");
     });
     it("linked room address shall be removed after agent disconnected",
       async () => {
       await cache.removeAgent(1);
       expect(cache.getRoomAddress(path1)).to.be.rejectedWith(Error);
       expect(cache.getRoomAddress(path2)).to.be.rejectedWith(Error);
-      expect(cache.getRoomName(path1)).to.be.rejectedWith(Error);
-      expect(cache.getRoomName(path2)).to.be.rejectedWith(Error);
+      expect(cache.getRoomName(room)).to.be.rejectedWith(Error);
+      expect(cache.getRoomName(room2)).to.be.rejectedWith(Error);
     });
     it("should be able to saved to pending list", async () => {
       await cache.addPending(path1);
@@ -106,298 +115,208 @@ describe("Cache module", () => {
       expect(list.length).to.equal(0);
     });
   });
+
   describe("TimeLine", () => {
+    const today = (h: number, m: number) =>
+      moment().startOf("day").hour(h).minute(m).valueOf();
+    const minutesMore = (m: number) => m * 60 * 1000;
+    const tomorrow = (h: number, m: number) =>
+      moment().startOf("day").add(1, "day").hour(h).minute(m).valueOf();
+    const sortAsc = (a: ITimelineEntry, b: ITimelineEntry) => a.start - b.start;
     it("Should return undefined when day without cache", async () => {
       await cache.flush();
-      const point = {dayOffset: 0, minutesOfDay: 0};
       const req = {
-        id: point,
+        id: moment().startOf("day").valueOf(),
         lookForward: true,
         maxCount: 2,
       };
-      expect(await cache.getTimeline(path1, req)).to.deep.equal(undefined);
+      expect(await cache.getTimeline(room, req)).to.deep.equal(undefined);
     });
     it("Should return empty array when search range has no meeting",
       async () => {
-      await cache.flush();
-      const point = {dayOffset: 0, minutesOfDay: 0};
-      const req = {
-        id: point,
-        lookForward: false,
-        maxCount: 2,
-      };
-      const timeline = [{start: 480, end: 510}, {start: 590, end: 620}];
-
-      await cache.setTimeline(path1, 0, timeline);
-      expect(await cache.getTimeline(path1, req)).to.deep.equal([]);
+        await cache.flush();
+        const req = {
+          id: today(0, 0),
+          lookForward: false,
+          maxCount: 2,
+        };
+        const entries = [
+          {start: today(6, 40), end: today(7, 40)},
+          {start: today(8, 40), end: today(9, 40)},
+        ];
+        await cache.setTimeline(room, today(0, 0), entries);
+        expect(await cache.getTimeline(room, req)).to.deep.equal([]);
     });
     it("Should return timeline sorted by startTime and exactly saved before",
       async () => {
-      await cache.flush();
-      const point = {dayOffset: 0, minutesOfDay: 400};
-      const point1 = {dayOffset: 0, minutesOfDay: 1030};
-      const point2 = {dayOffset: 0, minutesOfDay: 720};
-      const point3 = {dayOffset: 0, minutesOfDay: 590};
-
-      const req = {
-        id: point,
-        lookForward: true, // searching after point
-        maxCount: 100,
-      };
-
-      // 8h, 12h, 9h50
-      const expectResult = [
-        {start: 590, end: 620},
-        {start: 720, end: 740},
-        {start: 1030, end: 1060}];
-
-      await Promise.all([
-        cache.setTimelineEntry(path2, point3, 30),
-        cache.setTimelineEntry(path2, point2, 20),
-        cache.setTimelineEntry(path2, point1, 30),
-      ]);
-
-      expect(await cache.getTimeline(path2, req)).to.deep.equal(expectResult);
+        await cache.flush();
+        const req = {
+          id: today(6, 40),
+          lookForward: true,
+          maxCount: 100,
+        };
+        const entries = [
+          {start: today(9, 50), end: today(10, 20)},
+          {start: today(12, 0), end: today(12, 20)},
+          {start: today(17, 10), end: today(17, 40)},
+        ];
+        await cache.setTimeline(room, today(0, 0), []);
+        await Promise.all(entries.slice(0).reverse().map(
+          (e) => cache.setTimelineEntry(room, e)));
+        const timeline = await cache.getTimeline(room, req);
+        expect(timeline).to.deep.equal(entries);
     });
     it("Should return timeline sorted by startTime and exactly after modified",
       async () => {
-      await cache.flush();
-      const point = {dayOffset: 0, minutesOfDay: 400};
-      const point1 = {dayOffset: 0, minutesOfDay: 450};
-      const point2 = {dayOffset: 0, minutesOfDay: 720};
-      const point3 = {dayOffset: 0, minutesOfDay: 590};
-
-      const req = {
-        id: point,
-        lookForward: true, // searching after point
-        maxCount: 100,
-      };
-
-      // 8h, 12h, 9h50
-      const expectResult = [
-        {start: 450, end: 480},
-        {start: 590, end: 620},
-        {start: 720, end: 800}];
-
-      await Promise.all([
-        cache.setTimelineEntry(path2, point1, 30),
-        cache.setTimelineEntry(path2, point2, 20),
-        cache.setTimelineEntry(path2, point3, 30),
-        cache.setTimelineEntry(path2, point2, 80),
-      ]);
-
-      expect(await cache.getTimeline(path2, req)).to.deep.equal(expectResult);
+        await cache.flush();
+        const req = {
+          id: today(6, 40),
+          lookForward: true,
+          maxCount: 100,
+        };
+        const entries = [
+          {start: today(7, 30), end: today(8, 0)},
+          {start: today(9, 50), end: today(10, 20)},
+          {start: today(12, 0), end: today(12, 40)},
+        ];
+        const modified = entries.slice(0);
+        modified[1].end = modified[1].end + minutesMore(30);
+        await cache.setTimeline(room, today(0, 0), modified);
+        await cache.setTimelineEntry(room, entries[1]);
+        const tl = await cache.getTimeline(room, req);
+        expect(tl).to.deep.equal(entries);
     });
     it("Should return timeline sorted by startTime and exactly after removed",
       async () => {
-      await cache.flush();
-      const point = {dayOffset: 0, minutesOfDay: 130};
-      const point1 = {dayOffset: 0, minutesOfDay: 450};
-      const point2 = {dayOffset: 0, minutesOfDay: 720};
-      const point3 = {dayOffset: 0, minutesOfDay: 590};
-      const point4 = {dayOffset: 0, minutesOfDay: 900};
-
-      const req = {
-        id: point,
-        lookForward: true, // searching after point
-        maxCount: 100,
-      };
-
-      // 8h, 12h, 9h50
-      const expectResult = [
-        // {start: 450, end: 480},
-        {start: 590, end: 670},
-        {start: 720, end: 750},
-        {start: 900, end: 980},
+        await cache.flush();
+        const req = {
+          id: today(2, 10),
+          lookForward: true,
+          maxCount: 100,
+        };
+        const entries = [
+          {start: today(7, 30), end: today(7, 40)},
+          {start: today(12, 0), end: today(12, 20)},
+          {start: today(9, 50), end: today(10, 0)},
+          {start: today(15, 0), end: today(15, 40)},
         ];
-
-      await Promise.all([
-        cache.setTimelineEntry(path2, point1, 30),
-        cache.setTimelineEntry(path2, point2, 30),
-        cache.setTimelineEntry(path2, point3, 80),
-        cache.setTimelineEntry(path2, point4, 80),
-      ]);
-
-      await cache.removeTimelineEntry(path2, point1);
-      expect(await cache.getTimeline(path2, req)).to.deep.equal(expectResult);
+        await cache.setTimeline(room, today(0, 0), entries);
+        await cache.removeTimelineEntry(room, entries[0].start);
+        entries.shift();
+        const tl = await cache.getTimeline(room, req);
+        expect(tl).to.deep.equal(entries.sort(sortAsc));
     });
     it("Should return a part of timeline before timepoint when " +
       "look backwards and timepoint do not matching any startTime",
       async () => {
-      await cache.flush();
-      const point = {dayOffset: 0, minutesOfDay: 800};
-      const point1 = {dayOffset: 0, minutesOfDay: 450};
-      const point2 = {dayOffset: 0, minutesOfDay: 720};
-      const point3 = {dayOffset: 0, minutesOfDay: 590};
-      const point4 = {dayOffset: 0, minutesOfDay: 900};
-
-      const req = {
-        id: point,
-        lookForward: false, // searching before point
-        maxCount: 100,
-      };
-
-      // 8h, 12h, 9h50
-      const expectResult = [
-        {start: 450, end: 480},
-        {start: 590, end: 670},
-        {start: 720, end: 750},
-        // {start: 900, end: 980},
+        await cache.flush();
+        const req = {
+          id: today(13, 20),
+          lookForward: false, // searching before point
+          maxCount: 100,
+        };
+        const entries = [
+          {start: today(7, 30), end: today(7, 40)},
+          {start: today(12, 0), end: today(12, 20)},
+          {start: today(9, 50), end: today(10, 0)},
+          {start: today(15, 0), end: today(15, 40)},
         ];
-
-      await Promise.all([
-        cache.setTimelineEntry(path2, point1, 30),
-        cache.setTimelineEntry(path2, point2, 30),
-        cache.setTimelineEntry(path2, point3, 80),
-        cache.setTimelineEntry(path2, point4, 80),
-      ]);
-
-      expect(await cache.getTimeline(path2, req)).to.deep.equal(expectResult);
+        await cache.setTimeline(room, today(0, 0), entries);
+        const tl = await cache.getTimeline(room, req);
+        entries.pop();
+        expect(tl).to.deep.equal(entries.sort(sortAsc));
     });
     it("Should return a part of timeline after timepoint when " +
-      "look forwards and timepoint do not matching any startTime", async () => {
-      await cache.flush();
-      const point = {dayOffset: 0, minutesOfDay: 700};
-      const point1 = {dayOffset: 0, minutesOfDay: 450};
-      const point2 = {dayOffset: 0, minutesOfDay: 720};
-      const point3 = {dayOffset: 0, minutesOfDay: 590};
-      const point4 = {dayOffset: 0, minutesOfDay: 900};
-
-      const req = {
-        id: point,
-        lookForward: true, // searching after point
-        maxCount: 100,
-      };
-
-      // 8h, 12h, 9h50
-      const expectResult = [
-        // {start: 450, end: 480},
-        // {start: 590, end: 670},
-        {start: 720, end: 750},
-        {start: 900, end: 980},
-      ];
-
-      await Promise.all([
-        cache.setTimelineEntry(path2, point1, 30),
-        cache.setTimelineEntry(path2, point2, 30),
-        cache.setTimelineEntry(path2, point3, 80),
-        cache.setTimelineEntry(path2, point4, 80),
-      ]);
-
-      expect(await cache.getTimeline(path2, req)).to.deep.equal(expectResult);
+      "look forwards and timepoint do not matching any startTime",
+      async () => {
+        await cache.flush();
+        const req = {
+          id: today(11, 40),
+          lookForward: true,
+          maxCount: 100,
+        };
+        const entries = [
+          {start: today(7, 30), end: today(7, 40)},
+          {start: today(12, 0), end: today(12, 20)},
+          {start: today(9, 50), end: today(10, 0)},
+          {start: today(15, 0), end: today(15, 40)},
+        ];
+        await cache.setTimeline(room, today(0, 0), entries);
+        entries.sort(sortAsc);
+        const tl = await cache.getTimeline(room, req);
+        expect(tl).to.deep.equal(entries.slice(2));
     });
     it(`When look backwards, the requested timepoint should not be included`,
       async () => {
-      await cache.flush();
-      const point = {dayOffset: 0, minutesOfDay: 590};
-      const point1 = {dayOffset: 0, minutesOfDay: 450};
-      const point2 = {dayOffset: 0, minutesOfDay: 720};
-      const point3 = {dayOffset: 0, minutesOfDay: 590};
-      const point4 = {dayOffset: 0, minutesOfDay: 900};
-
-      const req = {
-        id: point,
-        lookForward: true, // searching after point
-        maxCount: 100,
-      };
-
-      const expectResult = [
-        // {start: 450, end: 480},
-        {start: 590, end: 670},
-        {start: 720, end: 750},
-        {start: 900, end: 980},
+        await cache.flush();
+        const req = {
+          id: today(12, 0),
+          lookForward: false,
+          maxCount: 100,
+        };
+        const entries = [
+          {start: today(7, 30), end: today(7, 40)},
+          {start: today(12, 0), end: today(12, 20)},
+          {start: today(9, 50), end: today(10, 0)},
+          {start: today(15, 0), end: today(15, 40)},
         ];
-
-      await Promise.all([
-        cache.setTimelineEntry(path2, point1, 30),
-        cache.setTimelineEntry(path2, point2, 30),
-        cache.setTimelineEntry(path2, point3, 80),
-        cache.setTimelineEntry(path2, point4, 80),
-      ]);
-
-      expect(await cache.getTimeline(path2, req)).to.deep.equal(expectResult);
+        await cache.setTimeline(room, today(0, 0), entries);
+        const tl = await cache.getTimeline(room, req);
+        expect(tl).to.deep.equal(entries.sort(sortAsc).slice(0, 2));
     });
     it(`When look forwards, the requested timepoint should be included`,
       async () => {
-      await cache.flush();
-      const point = {dayOffset: 0, minutesOfDay: 720};
-      const point1 = {dayOffset: 0, minutesOfDay: 450};
-      const point2 = {dayOffset: 0, minutesOfDay: 720};
-      const point3 = {dayOffset: 0, minutesOfDay: 590};
-      const point4 = {dayOffset: 0, minutesOfDay: 900};
-
-      const req = {
-        id: point,
-        lookForward: false, // searching before point
-        maxCount: 100,
-      };
-
-      const expectResult = [
-        {start: 450, end: 480},
-        {start: 590, end: 670},
-        // {start: 720, end: 750},
-        // {start: 900, end: 980},
-      ];
-
-      await Promise.all([
-        cache.setTimelineEntry(path2, point1, 30),
-        cache.setTimelineEntry(path2, point2, 30),
-        cache.setTimelineEntry(path2, point3, 80),
-        cache.setTimelineEntry(path2, point4, 80),
-      ]);
-
-      expect(await cache.getTimeline(path2, req)).to.deep.equal(expectResult);
+        await cache.flush();
+        const req = {
+          id: today(9, 50),
+          lookForward: true,
+          maxCount: 100,
+        };
+        const entries = [
+          {start: today(7, 30), end: today(7, 40)},
+          {start: today(12, 0), end: today(12, 20)},
+          {start: today(9, 50), end: today(10, 0)},
+          {start: today(15, 0), end: today(15, 40)},
+        ];
+        await cache.setTimeline(room, today(0, 0), entries);
+        const tl = await cache.getTimeline(room, req);
+        expect(tl).to.deep.equal(entries.sort(sortAsc).slice(1));
     });
     it("Should return fixed timline size by maxCount",
       async () => {
         await cache.flush();
-        const point = {dayOffset: 0, minutesOfDay: 740};
-        const point1 = {dayOffset: 0, minutesOfDay: 450};
-        const point2 = {dayOffset: 0, minutesOfDay: 720};
-        const point3 = {dayOffset: 0, minutesOfDay: 590};
-        const point4 = {dayOffset: 0, minutesOfDay: 900};
-
+        const entries = [
+          {start: today(7, 30), end: today(7, 40)},
+          {start: today(12, 0), end: today(12, 20)},
+          {start: today(9, 50), end: today(10, 0)},
+          {start: today(15, 0), end: today(15, 40)},
+        ];
         const req = {
-          id: point,
+          id: today(12, 20),
           lookForward: false, // searching before point
           maxCount: 1,
         };
-
-        const expectResult = [
-          // {start: 450, end: 480},
-          // {start: 590, end: 670},
-          {start: 720, end: 750},
-          // {start: 900, end: 980},
-        ];
-
-        await Promise.all([
-          cache.setTimelineEntry(path2, point1, 30),
-          cache.setTimelineEntry(path2, point2, 30),
-          cache.setTimelineEntry(path2, point3, 80),
-          cache.setTimelineEntry(path2, point4, 80),
-        ]);
-
-        expect(await cache.getTimeline(path2, req)).to.deep.equal(expectResult);
+        await cache.setTimeline(room, today(0, 0), entries);
+        const tl = await cache.getTimeline(room, req);
+        expect(tl).to.deep.equal(entries.slice(1, 2));
       });
 
     it("should return undefined after timeline expired",
       async function expiryTest() {
-      this.slow(5000);
-      await cache.flush();
-      cache.setExpiry(1);
-      const pathx = new PanLPath(99, 99);
-      const point = {dayOffset: 1, minutesOfDay: 120};
-      const point1 = {dayOffset: 1, minutesOfDay: 450};
-
+      this.slow(3000);
       const req = {
-        id: point,
-        lookForward: true, // searching after point
+        id: tomorrow(0, 0),
+        lookForward: true,
         maxCount: 100,
       };
-
-      await cache.setTimelineEntry(pathx, point1, 30);
-      await sleep(1190);
-      expect(await cache.getTimeline(pathx, req)).equal(undefined);
+      process.on("unhandledRejection", (r) => log.error(r));
+      await cache.flush();
+      cache.setExpiry(1);
+      await cache.setTimeline(room, tomorrow(0, 0), [
+        {start: tomorrow(2, 0), end: tomorrow(2, 30)},
+      ]);
+      await sleep(1050);
+      expect(await cache.getTimeline(room, req)).equal(undefined);
     });
     // Set timeline expire to 2 seconds, one second later get timeline
     // but do not get meeting info, expect meeting info,
@@ -405,54 +324,43 @@ describe("Cache module", () => {
     // expect all should not exists one second later.
     it("Should expired meetingInfo and meetingId when timeline expired",
       async function expiredAll() {
-      this.slow(10000);
-      await cache.flush();
-      cache.setExpiry(2);
-
-      const point = {dayOffset: 1, minutesOfDay: 300};
-      const point1 = {dayOffset: 1, minutesOfDay: 350};
-      const point2 = {dayOffset: 1, minutesOfDay: 520};
-      const point3 = {dayOffset: 1, minutesOfDay: 680};
-      const req = {
-        id: point,
-        lookForward: true,
-        maxCount: 100,
-      };
-      const p1 = {start: 350, end: 510 };
-      const p2 = {start: 520, end: 530 };
-      const p3 = {start: 680, end: 740 };
-      const timeline = [p1, p2, p3];
-      const expectResult = [p1, p2, p3];
-      const m1 = {subject: "Meeting_1", organizer: "TanNguyen" };
-      const m2 = {subject: "Meeting_2", organizer: "TanNguyen" };
-      const m3 = {subject: "Meeting_3", organizer: "TanNguyen" };
-
-      Promise.all([
-        await cache.setTimeline(path1, 1, timeline),
-        await cache.setMeetingInfo(path1, point1, m1),
-        await cache.setMeetingInfo(path1, point2, m2),
-        await cache.setMeetingInfo(path1, point3, m3),
-        await cache.setMeetingId(path1, point1, "meeting_id_1"),
-        await cache.setMeetingId(path1, point2, "meeting_id_2"),
-        await cache.setMeetingId(path1, point3, "meeting_id_3"),
-      ]);
-
-      await sleep(1000);
-      // 1 second later
-      expect(await cache.getTimeline(path1, req)).to.deep.equal(expectResult);
-      await sleep(500);
-      // 1.5 second later
-      expect(await cache.getMeetingInfo(path1, point1)).to.deep.equal(m1);
-      expect(await cache.getMeetingId(path1, point1)).equal("meeting_id_1");
-      await sleep(1600);
-      // 3.1 second later
-      // https://github.com/chaijs/chai/issues/415
-      expect(cache.getMeetingInfo(path1, point2))
-        .to.be.rejectedWith("Meeting info not found");
-
-      expect(cache.getMeetingId(path1, point2))
-        .to.be.rejectedWith("Meeting Id not found");
-    }).timeout(5000);
+        this.slow(5000);
+        await cache.flush();
+        const entries = [
+          {start: tomorrow(5, 50), end: tomorrow(7, 40)},
+          {start: tomorrow(8, 40), end: tomorrow(8, 50)},
+          {start: tomorrow(11, 20), end: tomorrow(12, 35)},
+        ];
+        const infos = [
+          {subject: "Meeting_1", organizer: "TanNguyen"},
+          {subject: "Meeting_2", organizer: "TanNguyen"},
+          {subject: "Meeting_3", organizer: "TanNguyen"},
+        ];
+        const req = {
+          id: tomorrow(5, 50),
+          lookForward: true,
+          maxCount: 100,
+        };
+        cache.setExpiry(1);
+        await Promise.all([
+          cache.setTimeline(room, tomorrow(0, 0), entries),
+          cache.setMeetingInfo(room, entries[2].start, infos[2]),
+          cache.setMeetingInfo(room, entries[0].start, infos[0]),
+          cache.setMeetingInfo(room, entries[1].start, infos[1]),
+        ]);
+        await sleep(300);
+        // 0.3 second later
+        const tl1 = await cache.getTimeline(room, req);
+        expect(tl1).to.deep.equal(entries);
+        await sleep(800);
+        // 0.8 second later
+        const info = await cache.getMeetingInfo(room, entries[1].start);
+        expect(info).to.deep.equal(infos[1]);
+        await sleep(300);
+        // 0.3 second later
+        expect(cache.getMeetingInfo(room, entries[1].start))
+          .to.be.rejectedWith("Meeting info not found");
+    }).timeout(8000);
   });
   describe("Day Offset", () => {
     it("should be able to setDayOffset");

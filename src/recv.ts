@@ -1,8 +1,9 @@
 import {EventEmitter} from "events";
+import moment = require("moment");
 import ref = require("ref");
 import ArrayType = require("ref-array");
 import StructType = require("ref-struct");
-import {ITimelineRequest, ITimePoint} from "./calendar";
+import {ITimelineRequest} from "./calendar";
 import {log} from "./log";
 import {PanLPath} from "./path";
 import {IAgentEvent, IPanLEvent} from "./service";
@@ -36,20 +37,18 @@ const StructAuthByRFID = StructType({
   epc : ArrayType(ref.types.uint8, 11),
 }, {packed: true});
 
+const StructTimepoint = StructType({
+  dayOffset: ref.types.int8,
+  minutesOfDay: ref.types.uint16,
+}, {packed: true});
+
 const StructTimeline = StructType({
-  offset: ref.types.int8,
-  time: ref.types.int16,
+  point: StructTimepoint,
   count: ref.types.uint8,
 }, {packed: true});
 
-const StructTime = StructType({
-  dayOffset: ref.types.int8,
-  minutesOfDay: ref.types.uint16,
-}, {packed: true});
-
 const StructTimespan = StructType({
-  dayOffset: ref.types.int8,
-  minutesOfDay: ref.types.uint16,
+  point: StructTimepoint,
   duration: ref.types.uint16,
 }, {packed: true});
 
@@ -66,6 +65,29 @@ export class MessageParser {
       throw new Error("Invalid client");
     }
     return buffer.slice(1);
+  }
+
+  private static getEpochTime(buf: Buffer): number {
+    const when = StructTimepoint(buf);
+    const now = moment();
+    const panlAtPM = (when.minutesOfDay & (1 << 11)) !== 0;
+    const hubAtPM = Number(now.format("HH")) >= 12;
+    let offset = when.dayOffset;
+
+    if (panlAtPM !== hubAtPM) {
+      if (hubAtPM) {
+        offset++;
+      } else {
+        offset--;
+      }
+    }
+    when.minutesOfDay &= (1 << 11) - 1;
+    return now.startOf("day").add(offset, "days").set({
+      hour: when.minutesOfDay / 60,
+      minute: when.minutesOfDay % 60,
+      second: 0,
+      millisecond: 0,
+    }).valueOf();
   }
 
   private stopped = false;
@@ -132,9 +154,10 @@ export class MessageParser {
         case Incoming.GET_TIMELINE: {
           [buf, next] = await this.waitBuf(next, StructTimeline.size);
           const tl = StructTimeline(buf);
+          const lookForward = tl.point.minutesOfDay >= 0;
           const req: ITimelineRequest = {
-            id: {dayOffset: tl.offset, minutesOfDay: Math.abs(tl.time)},
-            lookForward: tl.time >= 0,
+            id: MessageParser.getEpochTime(tl.point),
+            lookForward,
             maxCount: tl.count,
           };
           await this.panlEvt.onGetTimeline(this.path, req);
@@ -144,74 +167,50 @@ export class MessageParser {
           this.getBody = true;
           break;
         case Incoming.GET_MEETING_INFO: {
-          [buf, next] = await this.waitBuf(next, StructTime.size);
-          const when = StructTime(buf);
-          const point: ITimePoint = {
-            dayOffset: when.dayOffset,
-            minutesOfDay: when.minutesOfDay,
-          };
-          this.panlEvt.onGetMeetingInfo(this.path, point, this.getBody);
+          [buf, next] = await this.waitBuf(next, StructTimepoint.size);
+          this.panlEvt.onGetMeetingInfo(this.path,
+            MessageParser.getEpochTime(buf), this.getBody);
           this.getBody = false;
           break;
         }
         case Incoming.EXTEND_MEETING: {
           [buf, next] = await this.waitBuf(next, StructTimespan.size);
           const span = StructTimespan(buf);
-          const point: ITimePoint = {
-            dayOffset: span.dayOffset,
-            minutesOfDay: span.minutesOfDay,
-          };
-          await this.panlEvt.onExtendMeeting(this.path, point, span.duration);
+          const start = MessageParser.getEpochTime(span.point);
+          const end = start + span.duration * 60 * 1000;
+          await this.panlEvt.onExtendMeeting(this.path, {start, end});
           break;
         }
         case Incoming.CREATE_BOOKING: {
           [buf, next] = await this.waitBuf(next, StructTimespan.size);
           const span = StructTimespan(buf);
-          const point: ITimePoint = {
-            dayOffset: span.dayOffset,
-            minutesOfDay: span.minutesOfDay,
-          };
-          await this.panlEvt.onCreateBooking(this.path, point, span.duration);
+          const start = MessageParser.getEpochTime(span.point);
+          const end = start + span.duration * 60 * 1000;
+          await this.panlEvt.onCreateBooking(this.path, {start, end});
           break;
         }
         case Incoming.CANCEL_MEETING: {
-          [buf, next] = await this.waitBuf(next, StructTime.size);
-          const when = StructTime(buf);
-          const point: ITimePoint = {
-            dayOffset: when.dayOffset,
-            minutesOfDay: when.minutesOfDay,
-          };
-          await this.panlEvt.onCancelMeeting(this.path, point);
+          [buf, next] = await this.waitBuf(next, StructTimepoint.size);
+          await this.panlEvt.onCancelMeeting(this.path,
+            MessageParser.getEpochTime(buf));
           break;
         }
         case Incoming.END_MEETING: {
-          [buf, next] = await this.waitBuf(next, StructTime.size);
-          const when = StructTime(buf);
-          const point: ITimePoint = {
-            dayOffset: when.dayOffset,
-            minutesOfDay: when.minutesOfDay,
-          };
-          await this.panlEvt.onEndMeeting(this.path, point);
+          [buf, next] = await this.waitBuf(next, StructTimepoint.size);
+          await this.panlEvt.onEndMeeting(this.path,
+            MessageParser.getEpochTime(buf));
           break;
         }
         case Incoming.CANCEL_UNCLAIM_MEETING: {
-          [buf, next] = await this.waitBuf(next, StructTime.size);
-          const when = StructTime(buf);
-          const point: ITimePoint = {
-            dayOffset: when.dayOffset,
-            minutesOfDay: when.minutesOfDay,
-          };
-          await this.panlEvt.onCancelUnclaimedMeeting(this.path, point);
+          [buf, next] = await this.waitBuf(next, StructTimepoint.size);
+          await this.panlEvt.onCancelUnclaimedMeeting(this.path,
+            MessageParser.getEpochTime(buf));
           break;
         }
         case Incoming.CHECK_CLAIM_MEETING: {
-          [buf, next] = await this.waitBuf(next, StructTime.size);
-          const when = StructTime(buf);
-          const point: ITimePoint = {
-            dayOffset: when.dayOffset,
-            minutesOfDay: when.minutesOfDay,
-          };
-          await this.panlEvt.onCheckClaimMeeting(this.path, point);
+          [buf, next] = await this.waitBuf(next, StructTimepoint.size);
+          await this.panlEvt.onCheckClaimMeeting(this.path,
+            MessageParser.getEpochTime(buf));
           break;
         }
         default:

@@ -4,7 +4,7 @@ import {log} from "./log";
 
 export class Database {
   public static async getInstance(): Promise<Database> {
-    if (Database.instance === undefined) {
+    if (!Database.instance) {
       log.verbose("Database connections created");
       Database.instance = new Database(await createConnections());
       const conn = getConnection("auth");
@@ -15,7 +15,7 @@ export class Database {
     return Database.instance;
   }
 
-  private static instance: Database | undefined;
+  private static instance: Database;
 
   private constructor(private conns: Connection[], private refCnt = 1) { }
 
@@ -26,7 +26,7 @@ export class Database {
         log.silly("Close connection to " + conn.name);
         await conn.close();
       }
-      Database.instance = undefined;
+      delete Database.instance;
     }
   }
 

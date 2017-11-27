@@ -9,6 +9,7 @@ import {CalendarType, IHubConfig, IPanlConfig, Persist} from "./persist";
 import {ICalendarEvent} from "./service";
 
 export interface ITimelineEntry {
+  // epoch time
   start: number;
   end: number;
 }
@@ -18,38 +19,35 @@ export interface IMeetingInfo {
   organizer: string;
 }
 
-export interface ITimePoint {
-  dayOffset: number;
-  minutesOfDay: number;
-}
-
 export interface ITimelineRequest {
-  id: ITimePoint;
+  // epoch time
+  id: number;
   lookForward: boolean;
   maxCount: number;
 }
 
 export interface ICalendar {
-  getTimeline(path: PanLPath, dayOffset: number): Promise<boolean>;
-  createBooking(path: PanLPath, id: ITimePoint, duration: number,
-                email: string): Promise<ErrorCode>;
-  extendMeeting(path: PanLPath, id: ITimePoint, duration: number,
-                email: string): Promise<ErrorCode>;
-  endMeeting(path: PanLPath, id: ITimePoint, email: string): Promise<ErrorCode>;
-  cancelMeeting(path: PanLPath, id: ITimePoint, email: string):
+  getTimeline(room: string, id: number): Promise<boolean>;
+  createBooking(room: string, entry: ITimelineEntry, email: string):
   Promise<ErrorCode>;
-  cancelUnclaimedMeeting(path: PanLPath, id: ITimePoint): Promise<ErrorCode>;
-  isAttendeeInMeeting(path: PanLPath, id: ITimePoint, email: string):
+  extendMeeting(room: string, entry: ITimelineEntry, email: string):
+  Promise<ErrorCode>;
+  endMeeting(room: string, id: number, email: string): Promise<ErrorCode>;
+  cancelMeeting(room: string, id: number, email: string):
+  Promise<ErrorCode>;
+  cancelUnclaimedMeeting(room: string, id: number): Promise<ErrorCode>;
+  isAttendeeInMeeting(room: string, id: number, email: string):
   Promise<boolean>;
+  disconnect(): Promise<void>;
 }
 
 export interface ICalendarNotification {
-  onEndTimeChangeNofication(path: PanLPath, id: ITimePoint, duration: number):
+  onEndTimeChangeNofication(room: string, entry: ITimelineEntry):
   Promise<void>;
-  onAddNotification(path: PanLPath, id: ITimePoint, duration: number):
+  onAddNotification(room: string, entry: ITimelineEntry):
   Promise<void>;
-  onDeleteNotification(path: PanLPath, id: ITimePoint): Promise<void>;
-  onMeetingUpdateNotification(path: PanLPath, id: ITimePoint): Promise<void>;
+  onDeleteNotification(room: string, id: number): Promise<void>;
+  onMeetingUpdateNotification(room: string, id: number): Promise<void>;
 }
 
 export class CalendarManager implements ICalendarNotification {
@@ -70,24 +68,23 @@ export class CalendarManager implements ICalendarNotification {
 
   public async getTimeline(path: PanLPath, req: ITimelineRequest):
   Promise<ITimelineEntry[]> {
-    await this.cache.setDayOffset(path, req.id.dayOffset);
-    let entries = await this.cache.getTimeline(path, req);
+    await this.cache.setTimelineWindow(path, req.id);
+    const room = await this.cache.getRoomAddress(path);
+    let entries = await this.cache.getTimeline(room, req);
     if (entries === undefined) {
-      // get timeline from External server and cached
-      const isHave = await this.calendar.getTimeline(path, req.id.dayOffset);
-      // get in cache again
-      entries = isHave ? (await this.cache.getTimeline(path, req) || []) : [];
+      const isHave = await this.calendar.getTimeline(room, req.id);
+      entries = isHave ? (await this.cache.getTimeline(room, req) || []) : [];
     }
-
     return entries;
   }
 
-  public async getMeetingInfo(path: PanLPath, id: ITimePoint):
+  public async getMeetingInfo(path: PanLPath, id: number):
   Promise<IMeetingInfo> {
-    return this.cache.getMeetingInfo(path, id);
+    return this.cache.getMeetingInfo(
+      await this.cache.getRoomAddress(path), id);
   }
 
-  public async createBooking(path: PanLPath, id: ITimePoint, duration: number):
+  public async createBooking(path: PanLPath, entry: ITimelineEntry):
   Promise<ErrorCode> {
     if (this.panlConfig.featureDisabled.onSpotBooking) {
       return ErrorCode.ERROR_FEATURE_DISABLED;
@@ -98,97 +95,127 @@ export class CalendarManager implements ICalendarNotification {
         email.length === 0) {
       return ErrorCode.ERROR_AUTH_ERROR;
     }
-    return this.calendar.createBooking(path, id, duration, email);
+    return this.calendar.createBooking(await this.cache.getRoomAddress(path),
+      entry, email);
   }
 
-  public async extendMeeting(path: PanLPath, id: ITimePoint, duration: number):
+  public async extendMeeting(path: PanLPath, entry: ITimelineEntry):
   Promise<ErrorCode> {
+    const room = await this.cache.getRoomAddress(path);
     if (this.panlConfig.featureDisabled.extendMeeting) {
       return ErrorCode.ERROR_FEATURE_DISABLED;
     }
     const email = await this.cache.getAuth(path);
     if (this.panlConfig.authAllowPasscode.extendMeeting ||
         this.panlConfig.authAllowRFID.extendMeeting) {
-      if (!await this.calendar.isAttendeeInMeeting(path, id, email)) {
+      if (!email) {
+        return ErrorCode.ERROR_AUTH_ERROR;
+      }
+      if (!await this.calendar.isAttendeeInMeeting(room, entry.start, email)) {
         return ErrorCode.ERROR_AUTH_ERROR;
       }
     }
-    return this.calendar.extendMeeting(path, id, duration, email);
+    return this.calendar.extendMeeting(room, entry, email);
   }
 
-  public async endMeeting(path: PanLPath, id: ITimePoint): Promise<ErrorCode> {
+  public async endMeeting(path: PanLPath, id: number): Promise<ErrorCode> {
+    const room = await this.cache.getRoomAddress(path);
     if (this.panlConfig.featureDisabled.endMeeting) {
       return ErrorCode.ERROR_FEATURE_DISABLED;
     }
     const email = await this.cache.getAuth(path);
     if (this.panlConfig.authAllowPasscode.endMeeting ||
         this.panlConfig.authAllowRFID.endMeeting) {
-      if (!await this.calendar.isAttendeeInMeeting(path, id, email)) {
+      if (!email) {
+        return ErrorCode.ERROR_AUTH_ERROR;
+      }
+      if (!await this.calendar.isAttendeeInMeeting(room, id, email)) {
         return ErrorCode.ERROR_AUTH_ERROR;
       }
     }
-    return this.calendar.endMeeting(path, id, email);
+    return this.calendar.endMeeting(room, id, email);
   }
 
-  public async cancelMeeting(path: PanLPath, id: ITimePoint):
+  public async cancelMeeting(path: PanLPath, id: number):
   Promise<ErrorCode> {
+    const room = await this.cache.getRoomAddress(path);
     if (this.panlConfig.featureDisabled.cancelMeeting) {
       return ErrorCode.ERROR_FEATURE_DISABLED;
     }
     const email = await this.cache.getAuth(path);
     if (this.panlConfig.authAllowPasscode.cancelMeeting ||
         this.panlConfig.authAllowRFID.cancelMeeting) {
-      if (!await this.calendar.isAttendeeInMeeting(path, id, email)) {
+      if (!email) {
+        return ErrorCode.ERROR_AUTH_ERROR;
+      }
+      if (!await this.calendar.isAttendeeInMeeting(room, id, email)) {
         return ErrorCode.ERROR_AUTH_ERROR;
       }
     }
-    return this.calendar.cancelMeeting(path, id, email);
+    return this.calendar.cancelMeeting(room, id, email);
   }
 
-  public async checkClaimMeeting(path: PanLPath, id: ITimePoint):
+  public async checkClaimMeeting(path: PanLPath, id: number):
   Promise<ErrorCode> {
     if (this.panlConfig.featureDisabled.claimMeeting) {
       return ErrorCode.ERROR_FEATURE_DISABLED;
     }
     if (this.panlConfig.authAllowPasscode.claimMeeting ||
         this.panlConfig.authAllowRFID.claimMeeting) {
-      if (!await this.calendar.isAttendeeInMeeting(path, id,
-        await this.cache.getAuth(path))) {
+      const email = await this.cache.getAuth(path);
+      if (!email) {
+        return ErrorCode.ERROR_AUTH_ERROR;
+      }
+      if (!await this.calendar.isAttendeeInMeeting(
+            await this.cache.getRoomAddress(path), id, email)) {
         return ErrorCode.ERROR_AUTH_ERROR;
       }
     }
     return ErrorCode.ERROR_SUCCESS;
   }
 
-  public cancelUnclaimedMeeting(path: PanLPath, id: ITimePoint):
+  public async cancelUnclaimedMeeting(path: PanLPath, id: number):
   Promise<ErrorCode> {
-    return this.calendar.cancelUnclaimedMeeting(path, id);
+    return this.calendar.cancelUnclaimedMeeting(
+      await this.cache.getRoomAddress(path), id);
   }
 
-  public async onAddNotification(path: PanLPath, id: ITimePoint,
-                                 duration: number): Promise<void> {
-    await this.cache.setTimelineEntry(path, id, duration);
-    await this.event.onAdd(path, id, duration);
+  public async onAddNotification(room: string, entry: ITimelineEntry):
+  Promise<void> {
+    await this.cache.setTimelineEntry(room, entry);
+    const paths = await this.cache.getRoomPanLs(room);
+    for (const path of paths) {
+      this.event.onAdd(path, entry);
+    }
   }
 
   public async onEndTimeChangeNofication(
-    path: PanLPath, id: ITimePoint, duration: number): Promise<void> {
+    room: string, entry: ITimelineEntry): Promise<void> {
     // Start time no change
-    await this.cache.setTimelineEntry(path, id, duration);
-    await this.event.onExtend(path, id, duration);
+    await this.cache.setTimelineEntry(room, entry);
+    const paths = await this.cache.getRoomPanLs(room);
+    for (const path of paths) {
+      this.event.onExtend(path, entry);
+    }
   }
 
-  public async onDeleteNotification(path: PanLPath, id: ITimePoint):
+  public async onDeleteNotification(room: string, id: number):
   Promise<void> {
     // Call onDeleteNotification and onAddNotification if start time changed
-    await this.cache.removeTimelineEntry(path, id);
-    await this.event.onDelete(path, id);
+    await this.cache.removeTimelineEntry(room, id);
+    const paths = await this.cache.getRoomPanLs(room);
+    for (const path of paths) {
+      this.event.onDelete(path, id);
+    }
   }
 
-  public async onMeetingUpdateNotification(path: PanLPath, id: ITimePoint):
+  public async onMeetingUpdateNotification(room: string, id: number):
   Promise<void> {
     // Start and end time no change
-    await this.event.onUpdate(path, id);
+    const paths = await this.cache.getRoomPanLs(room);
+    for (const path of paths) {
+      this.event.onUpdate(path, id);
+    }
   }
 
   public async connect(): Promise<void> {
@@ -223,6 +250,8 @@ export class CalendarManager implements ICalendarNotification {
   }
 
   public async disconnect(): Promise<void> {
+    await this.calendar.disconnect();
     this.isConnected = false;
+    delete this.calendar;
   }
 }

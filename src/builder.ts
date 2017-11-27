@@ -1,21 +1,23 @@
+import moment = require("moment");
 import ref = require("ref");
 import StructType = require("ref-struct");
-import {IMeetingInfo, ITimelineEntry, ITimePoint} from "./calendar";
+import {IMeetingInfo, ITimelineEntry} from "./calendar";
 import {IHubConfig, IPanlConfig} from "./persist";
+
+interface ITimePoint {
+  dayOffset: number;
+  minutesOfDay: number;
+}
 
 export enum ErrorCode {
   ERROR_SUCCESS,
+  ERROR_UNKNOWN,
   ERROR_AUTH_ERROR,
   ERROR_FEATURE_DISABLED,
   ERROR_CERTIFICATE,
   ERROR_NETWORK,
-  ERROR_UNKNOWN,
   ERROR_CACHE_ROOMNAME_NOT_FOUND,
-  ERROR_CACHE_ROOMADDRESS_NOT_FOUND,
   ERROR_CACHE_MEETINGID_NOT_FOUND,
-  ERROR_CACHE_EWS_NOT_FOUND,
-  ERROR_CACHE_MEETINGINFO_NOT_FOUND,
-  ERROR_CACHE_TIMELINE_ENTRY_NOT_FOUND,
   ERROR_MALFORMED_DATA,
   ERROR_OBJECT_NOT_FOUND,
   ERROR_ENDDATE_EARLIER_STARTDATA,
@@ -279,8 +281,23 @@ export class MessageBuilder {
     }).ref();
   }
 
-  public static buildTimeline(entries: ITimelineEntry[], dayOffset: number):
+  public static buildTimeline(entries: ITimelineEntry[], id: number):
   Buffer[] {
+    const now = moment();
+    const pm = Number(now.format("HH")) >= 12;
+    const dayStart = moment(id).startOf("day");
+    const dayOffset = dayStart.diff(now.startOf("day"), "days");
+    const getMinutes = (epoch: number) => {
+      const minutes = moment(epoch).diff(dayStart, "minutes");
+      if (minutes < 0 || minutes >= 24 * 60) {
+        throw(new Error("Wrong epoch time:" + epoch));
+      }
+      return minutes;
+    };
+    if (dayOffset < -128 || dayOffset > 127) {
+      throw(new Error("Wrong dayOffset:" + dayOffset));
+    }
+
     return [new StructSetTimelineHdr({
         cmd: Outgoing.SET_TIMELINE,
         dayOffset,
@@ -288,8 +305,8 @@ export class MessageBuilder {
       }).ref(),
       ...entries.map((i) => {
         return new StructTimelineEntry({
-          startTime: i.start,
-          endTime: i.end,
+          startTime: getMinutes(i.start) | (pm ? (1 << 11) : 0),
+          endTime: getMinutes(i.end),
         }).ref();
       }),
     ];
@@ -307,38 +324,41 @@ export class MessageBuilder {
       subject, organizer];
   }
 
-  public static buildAddMeeting(id: ITimePoint, duration: number): Buffer {
+  public static buildAddMeeting(entry: ITimelineEntry): Buffer {
+    const tp = MessageBuilder.epochToOffset(entry.start);
     return new StructAddMeeting({
       cmd: Outgoing.ON_ADD_MEETING,
-      dayOffset: id.dayOffset,
-      minutesOfDay: id.minutesOfDay,
-      duration,
+      dayOffset: tp.dayOffset,
+      minutesOfDay: tp.minutesOfDay,
+      duration: moment(entry.end).diff(moment(entry.start), "minutes"),
     }).ref();
   }
 
-  public static buildExtendMeeting(id: ITimePoint, newDuration: number):
-  Buffer {
+  public static buildExtendMeeting(entry: ITimelineEntry): Buffer {
+    const tp = MessageBuilder.epochToOffset(entry.start);
     return new StructExtendMeeting({
       cmd: Outgoing.ON_EXTEND_MEETING,
-      dayOffset: id.dayOffset,
-      minutesOfDay: id.minutesOfDay,
-      newDuration,
+      dayOffset: tp.dayOffset,
+      minutesOfDay: tp.minutesOfDay,
+      duration: moment(entry.end).diff(moment(entry.start), "minutes"),
     }).ref();
   }
 
-  public static buildDeleteMeeting(id: ITimePoint): Buffer {
+  public static buildDeleteMeeting(id: number): Buffer {
+    const tp = MessageBuilder.epochToOffset(id);
     return new StructDeleteMeeting({
       cmd: Outgoing.ON_DEL_MEETING,
-      dayOffset: id.dayOffset,
-      minutesOfDay: id.minutesOfDay,
+      dayOffset: tp.dayOffset,
+      minutesOfDay: tp.minutesOfDay,
     }).ref();
   }
 
-  public static buildUpdateMeeting(id: ITimePoint): Buffer {
+  public static buildUpdateMeeting(id: number): Buffer {
+    const tp = MessageBuilder.epochToOffset(id);
     return new StructUpdateMeeting({
       cmd: Outgoing.ON_UPDATE_MEETING,
-      dayOffset: id.dayOffset,
-      minutesOfDay: id.minutesOfDay,
+      dayOffset: tp.dayOffset,
+      minutesOfDay: tp.minutesOfDay,
     }).ref();
   }
 
@@ -368,5 +388,18 @@ export class MessageBuilder {
       i++;
     }
     return val;
+  }
+
+  private static epochToOffset(id: number): ITimePoint {
+    const ts = moment(id);
+    const now = moment();
+    let minutesOfDay = ts.diff(ts.clone().startOf("day"), "minutes");
+    if (Number(now.format("HH")) >= 12) {
+      minutesOfDay |= 1 << 11;
+    }
+    return {
+      dayOffset: ts.startOf("day").diff(now.startOf("day"), "days"),
+      minutesOfDay,
+    };
   }
 }

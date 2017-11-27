@@ -2,7 +2,7 @@ import moment = require("moment");
 import {Auth} from "./auth";
 import {ErrorCode, MessageBuilder} from "./builder";
 import {Cache} from "./cache";
-import {CalendarManager, ITimelineRequest, ITimePoint} from "./calendar";
+import {CalendarManager, ITimelineEntry, ITimelineRequest} from "./calendar";
 import {Database} from "./database";
 import {log} from "./log";
 import {PanLPath} from "./path";
@@ -25,30 +25,28 @@ export interface IPanLEvent {
   onPasscode(path: PanLPath, code: number): Promise<void>;
   onRFID(path: PanLPath, epc: Buffer): Promise<void>;
   onGetTimeline(path: PanLPath, req: ITimelineRequest): Promise<void>;
-  onGetMeetingInfo(path: PanLPath, id: ITimePoint, getBody: boolean):
+  onGetMeetingInfo(path: PanLPath, id: number, getBody: boolean):
   Promise<void>;
-  onCreateBooking(path: PanLPath, id: ITimePoint, duration: number):
-  Promise<void>;
-  onExtendMeeting(path: PanLPath, id: ITimePoint, duration: number):
-  Promise<void>;
-  onCancelUnclaimedMeeting(path: PanLPath, id: ITimePoint): Promise<void>;
-  onEndMeeting(path: PanLPath, id: ITimePoint): Promise<void>;
-  onCancelMeeting(path: PanLPath, id: ITimePoint): Promise<void>;
-  onCheckClaimMeeting(path: PanLPath, id: ITimePoint): Promise<void>;
+  onCreateBooking(path: PanLPath, entry: ITimelineEntry): Promise<void>;
+  onExtendMeeting(path: PanLPath, entry: ITimelineEntry): Promise<void>;
+  onCancelUnclaimedMeeting(path: PanLPath, id: number): Promise<void>;
+  onEndMeeting(path: PanLPath, id: number): Promise<void>;
+  onCancelMeeting(path: PanLPath, id: number): Promise<void>;
+  onCheckClaimMeeting(path: PanLPath, id: number): Promise<void>;
 }
 
 export interface ICalendarEvent {
   onCalMgrReady(): Promise<void>;
   onCalMgrError(err: Error): Promise<void>;
-  onAdd(path: PanLPath, id: ITimePoint, duration: number): Promise<void>;
-  onDelete(path: PanLPath, id: ITimePoint): Promise<void>;
-  onUpdate(path: PanLPath, id: ITimePoint): Promise<void>;
-  onExtend(path: PanLPath, id: ITimePoint, newDuration: number): Promise<void>;
+  onAdd(path: PanLPath, entry: ITimelineEntry): Promise<void>;
+  onDelete(path: PanLPath, id: number): Promise<void>;
+  onUpdate(path: PanLPath, id: number): Promise<void>;
+  onExtend(path: PanLPath, entry: ITimelineEntry): Promise<void>;
 }
 
 export class PanLService implements IAgentEvent, IPanLEvent, ICalendarEvent {
   public static async getInstance(): Promise<PanLService> {
-    if (PanLService.instance === undefined) {
+    if (!PanLService.instance) {
       PanLService.db = await Database.getInstance();
       PanLService.cache = await Cache.getInstance();
       PanLService.instance = new PanLService(await Persist.getHubConfig(),
@@ -59,14 +57,9 @@ export class PanLService implements IAgentEvent, IPanLEvent, ICalendarEvent {
     return PanLService.instance;
   }
 
-  private static instance: PanLService | undefined;
+  private static instance: PanLService;
   private static cache: Cache;
   private static db: Database;
-
-  private static getMinutesPassed(): number {
-    const date = new Date();
-    return date.getHours() * 60 + date.getMinutes();
-  }
 
   private tx: Transmit;
   private cal: CalendarManager;
@@ -87,7 +80,7 @@ export class PanLService implements IAgentEvent, IPanLEvent, ICalendarEvent {
       await this.cal.disconnect();
       await PanLService.cache.stop();
       await PanLService.db.stop();
-      PanLService.instance = undefined;
+      delete PanLService.instance;
     }
   }
 
@@ -164,19 +157,19 @@ export class PanLService implements IAgentEvent, IPanLEvent, ICalendarEvent {
   public async onGetTimeline(
     path: PanLPath, req: ITimelineRequest): Promise<void> {
     try {
-      const date = `${req.id.dayOffset}${req.lookForward ? "+" : "-"}`;
-      const time = `${req.id.minutesOfDay / 60}:${req.id.minutesOfDay % 60}`;
-      log.debug(`Path ${path} request up to ${req.maxCount} ` +
-        `busy slots ${date} ${time}`);
+      const datetime = moment(req.id).calendar();
+      const method = req.lookForward ? "from" : "before";
+      log.debug(`Path ${path} requests ${req.maxCount} slots ${method} ` +
+        datetime);
       this.tx.send(path, MessageBuilder.buildTimeline(
-        await this.cal.getTimeline(path, req), req.id.dayOffset));
+        await this.cal.getTimeline(path, req), req.id));
     } catch (err) {
       log.warn(`Not able to get timeline for ${path}: ${err}`);
     }
   }
 
   public async onGetMeetingInfo(
-    path: PanLPath, id: ITimePoint, getBody: boolean): Promise<void> {
+    path: PanLPath, id: number, getBody: boolean): Promise<void> {
     if (getBody) {
       log.error("TODO: Parameter getBody not implemented.");
     }
@@ -188,27 +181,27 @@ export class PanLService implements IAgentEvent, IPanLEvent, ICalendarEvent {
     }
   }
 
-  public async onCreateBooking(path: PanLPath, id: ITimePoint,
-                               duration: number): Promise<void> {
+  public async onCreateBooking(path: PanLPath, entry: ITimelineEntry):
+  Promise<void> {
     try {
       this.tx.send(path, [MessageBuilder.buildErrorCode(
-        await this.cal.createBooking(path, id, duration))]);
+        await this.cal.createBooking(path, entry))]);
     } catch (err) {
       log.warn(`Create booking failed for ${path}: ${err}`);
     }
   }
 
-  public async onExtendMeeting(path: PanLPath, id: ITimePoint,
-                               duration: number): Promise<void> {
+  public async onExtendMeeting(path: PanLPath, entry: ITimelineEntry):
+  Promise<void> {
     try {
       this.tx.send(path, [MessageBuilder.buildErrorCode(
-        await this.cal.extendMeeting(path, id, duration))]);
+        await this.cal.extendMeeting(path, entry))]);
     } catch (err) {
       log.warn(`Extend meeting failed for ${path}: ${err}`);
     }
   }
 
-  public async onCancelUnclaimedMeeting(path: PanLPath, id: ITimePoint):
+  public async onCancelUnclaimedMeeting(path: PanLPath, id: number):
   Promise<void> {
     if (path.dest === MessageBuilder.BROADCAST_ADDR) {
       log.error(`Invalid sender from agent ${path.agent}.`);
@@ -221,7 +214,7 @@ export class PanLService implements IAgentEvent, IPanLEvent, ICalendarEvent {
     }
   }
 
-  public async onEndMeeting(path: PanLPath, id: ITimePoint):
+  public async onEndMeeting(path: PanLPath, id: number):
   Promise<void> {
     try {
       this.tx.send(path, [MessageBuilder.buildErrorCode(
@@ -231,7 +224,7 @@ export class PanLService implements IAgentEvent, IPanLEvent, ICalendarEvent {
     }
   }
 
-  public async onCancelMeeting(path: PanLPath, id: ITimePoint):
+  public async onCancelMeeting(path: PanLPath, id: number):
   Promise<void> {
     try {
       this.tx.send(path, [MessageBuilder.buildErrorCode(
@@ -241,7 +234,7 @@ export class PanLService implements IAgentEvent, IPanLEvent, ICalendarEvent {
     }
   }
 
-  public async onCheckClaimMeeting(path: PanLPath, id: ITimePoint):
+  public async onCheckClaimMeeting(path: PanLPath, id: number):
   Promise<void> {
     try {
       this.tx.send(path, [MessageBuilder.buildErrorCode(
@@ -251,26 +244,24 @@ export class PanLService implements IAgentEvent, IPanLEvent, ICalendarEvent {
     }
   }
 
-  public async onExtend(
-    path: PanLPath, id: ITimePoint, newDuration: number): Promise<void> {
+  public async onExtend(path: PanLPath, entry: ITimelineEntry): Promise<void> {
     try {
-      this.tx.send(path, [MessageBuilder.buildExtendMeeting(id, newDuration)]);
+      this.tx.send(path, [MessageBuilder.buildExtendMeeting(entry)]);
     } catch (err) {
       log.warn(`Extend meeting notification failed for ${path}: ${err}`);
     }
   }
 
-  public async onAdd(
-    path: PanLPath, id: ITimePoint, duration: number): Promise<void> {
+  public async onAdd(path: PanLPath, entry: ITimelineEntry): Promise<void> {
     try {
-      this.tx.send(path, [MessageBuilder.buildAddMeeting(id, duration)]);
+      this.tx.send(path, [MessageBuilder.buildAddMeeting(entry)]);
     } catch (err) {
       log.warn(`Add meeting notification failed for ${path}: ${err}`);
     }
   }
 
   public async onDelete(
-    path: PanLPath, id: ITimePoint): Promise<void> {
+    path: PanLPath, id: number): Promise<void> {
     try {
       this.tx.send(path, [MessageBuilder.buildDeleteMeeting(id)]);
     } catch (err) {
@@ -279,7 +270,7 @@ export class PanLService implements IAgentEvent, IPanLEvent, ICalendarEvent {
   }
 
   public async onUpdate(
-    path: PanLPath, id: ITimePoint): Promise<void> {
+    path: PanLPath, id: number): Promise<void> {
     try {
       this.tx.send(path, [MessageBuilder.buildUpdateMeeting(id)]);
     } catch (err) {
@@ -307,26 +298,29 @@ export class PanLService implements IAgentEvent, IPanLEvent, ICalendarEvent {
   }
 
   private async initPanel(path: PanLPath): Promise<void> {
-    const now = PanLService.getMinutesPassed();
+    const now = moment();
+    const epoch = now.valueOf();
+    const minutesOfDay = now.diff(now.clone().startOf("day"), "minutes");
     const reqBefore: ITimelineRequest = {
-      id: {dayOffset: 0, minutesOfDay: now},
+      id: epoch,
       lookForward: false,
       maxCount: 1,
     };
     const reqAfter: ITimelineRequest = {
-      id: {dayOffset: 0, minutesOfDay: now},
+      id: epoch,
       lookForward: true,
       maxCount: 5,
     };
 
     try {
       const [name, entriesBefore, entriesAfter] = await Promise.all([
-        PanLService.cache.getRoomName(path),
+        PanLService.cache.getRoomName(
+          await PanLService.cache.getRoomAddress(path)),
         this.cal.getTimeline(path, reqBefore),
         this.cal.getTimeline(path, reqAfter),
       ]);
       const ignoreBefore = entriesBefore.length === 0 ||
-        now >= entriesBefore[0].end;
+        minutesOfDay >= entriesBefore[0].end;
       const entries = ignoreBefore
         ? entriesAfter : entriesBefore.concat(entriesAfter);
       log.debug(`Request ${path} set room name to ${name}, busy slot(s): ` +
@@ -341,16 +335,13 @@ export class PanLService implements IAgentEvent, IPanLEvent, ICalendarEvent {
           ...MessageBuilder.buildRoomName(name),
           ...MessageBuilder.buildTimeline(entries, 0),
           ...MessageBuilder.buildMeetingInfo(
-            await this.cal.getMeetingInfo(path, {
-              dayOffset: 0, minutesOfDay: entries[0].start})),
+            await this.cal.getMeetingInfo(path, entries[0].start)),
         ]);
       } else {
         // Send next meeting info too
         const info = await Promise.all([
-          this.cal.getMeetingInfo(path,
-            {dayOffset: 0, minutesOfDay: entries[0].start}),
-          this.cal.getMeetingInfo(path,
-            {dayOffset: 0, minutesOfDay: entries[1].start}),
+          this.cal.getMeetingInfo(path, entries[0].start),
+          this.cal.getMeetingInfo(path, entries[1].start),
         ]);
         this.tx.send(path, [
           ...MessageBuilder.buildRoomName(name),
