@@ -2,7 +2,8 @@ import {Int64LE} from "int64-buffer";
 import "reflect-metadata";
 import {Agent} from "./entity/hub/agent";
 import {Config, ConfigType} from "./entity/hub/config";
-import {Link} from "./entity/hub/link";
+import {Panl} from "./entity/hub/panl";
+import {Room} from "./entity/hub/room";
 import {log} from "./log";
 
 export enum CalendarType {
@@ -47,15 +48,10 @@ export interface IPanlConfig {
   authAllowRFID: IMeetingControlUnit;
 }
 
-export interface IRoom {
-  address: string;
-  name: string;
-}
-
 export class Persist {
   public static async getAgentId(buf: Buffer): Promise<number> {
     const uid = new Int64LE(buf);
-    let agent = await Agent.findOne({where : {uid: uid.toString()}}) as Agent;
+    let agent = await Agent.findOne({where : {uid: uid.toString()}});
     if (agent !== undefined) {
       return agent.id;
     } else {
@@ -66,47 +62,44 @@ export class Persist {
     }
   }
 
-  public static async addRoom(room: IRoom): Promise<void> {
-    let link = await Link.findOne({where: {address : room.address}}) as Link;
-    if (link !== undefined) {
-      link.name = room.name;
-      // TODO: update PanL room name
+  public static async addRoom(address: string, name: string): Promise<void> {
+    let room = await Room.findOne({where: {address}});
+
+    if (room === undefined) {
+      room = new Room(address, name);
     } else {
-      link = new Link();
-      link.address = room.address;
-      link.name = room.name;
-      link.uuid = "0";
+      room.name = name;
     }
-    await link.save();
+    await room.save();
   }
 
-  public static async findRoom(uuid: Buffer): Promise<IRoom | undefined> {
+  public static async findRoom(email: string): Promise<Room | undefined> {
+    return Room.findOne({where: {address: email}});
+  }
+
+  public static async findPanlRoom(uuid: Buffer): Promise<Room | undefined> {
+    return Panl.findRoom((new Int64LE(uuid)).toString());
+  }
+
+  public static async linkPanL(uuid: Buffer, room: Room): Promise<void> {
     const val = new Int64LE(uuid);
-    const link = await Link.findOne({where: {uuid: val.toString()}}) as Link;
-    return link === undefined ? undefined :
-      {address: link.address, name: link.name};
-  }
+    let panl = await Panl.findOne({where: {uuid: val.toString()}});
 
-  public static async findRoomUuid(address: string):
-  Promise<string | undefined> {
-    const link = await Link.findOne({where: {address}}) as Link;
-    return link === undefined ? undefined : link.uuid;
-  }
-
-  public static async linkPanL(uuid: Buffer, email: string): Promise<void> {
-    const link = await Link.findOne({where: {address: email}}) as Link;
-    if (link === undefined) {
-      return;
+    if (panl === undefined) {
+      panl = new Panl();
+      panl.uuid = new Int64LE(uuid).toString();
+      panl.room = room;
+    } else {
+      panl.room = room;
     }
-    link.uuid = new Int64LE(uuid).toString();
-    await link.save();
+    await panl.save();
   }
 
   public static async removePanL(uuid: Buffer): Promise<void> {
     const val = new Int64LE(uuid);
-    const link = await Link.findOne({where: {uuid : val.toString()}}) as Link;
-    if (link !== undefined) {
-      await link.remove();
+    const panl = await Panl.findOne({where: {uuid : val.toString()}});
+    if (panl !== undefined) {
+      await panl.remove();
     }
   }
 
@@ -171,7 +164,7 @@ export class Persist {
   }
 
   private static async getConfig<T>(id: number, def: T): Promise<T> {
-    const v = await Config.findOne({where: {id}}) as Config;
+    const v = await Config.findOne({where: {id}});
 
     if (v === undefined) {
       return def;
@@ -181,7 +174,7 @@ export class Persist {
   }
 
   private static async setConfig<T>(id: number, cfg: T): Promise<void> {
-    let v = await Config.findOne({where: {id}}) as Config;
+    let v = await Config.findOne({where: {id}});
     if (v === undefined) {
       v = new Config();
       v.id = id;

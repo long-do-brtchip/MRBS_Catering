@@ -31,13 +31,12 @@ describe("Persist module", function foo() {
   describe("room and PanL", () => {
     it("should be able to add room", async () => {
       const db = await Database.getInstance();
-      await Persist.addRoom(
-        {address: "test_room1@ftdi.local", name: "Test Room 1"});
-      await Persist.addRoom(
-        {address: "test_room1@ftdi.local", name: "Test Room 1"});
-      await Persist.addRoom(
-        {address: "test_room2@ftdi.local", name: "Test Room 2"});
+      await Persist.addRoom("test_room1@ftdi.local", "Test Room 1");
+      await Persist.addRoom("test_room1@ftdi.local", "Test Room 1");
+      await Persist.addRoom("test_room3@ftdi.local", "Test Room 3");
+      const room = await Persist.findRoom("test_room1@ftdi.local");
       await db.stop();
+      expect(room).to.not.equal(undefined);
     });
 
     const fakeUUID =
@@ -46,14 +45,20 @@ describe("Persist module", function foo() {
       new Buffer([0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08]);
     it("should be able to link room to PanL", async () => {
       const db = await Database.getInstance();
-      await Persist.linkPanL(panlUUID, "test_room1@ftdi.local");
-      await Persist.linkPanL(panlUUID, "test_room3@ftdi.local");
-      await db.stop();
+      const room1 = await Persist.findRoom("test_room1@ftdi.local");
+      const room3 = await Persist.findRoom("test_room3@ftdi.local");
+      if (room1 === undefined || room3 === undefined) {
+        assert(room1 !== undefined && room3 !== undefined);
+      } else {
+        await Persist.linkPanL(panlUUID, room3);
+        await Persist.linkPanL(panlUUID, room1);
+        await db.stop();
+      }
     });
     it("should be able to find linked room from PanL UUID", async () => {
       const db = await Database.getInstance();
-      const room = await Persist.findRoom(panlUUID);
-      const noRoom = await Persist.findRoom(fakeUUID);
+      const room = await Persist.findPanlRoom(panlUUID);
+      const noRoom = await Persist.findPanlRoom(fakeUUID);
       await db.stop();
       expect(noRoom).to.equal(undefined);
       expect(room).to.not.equal(undefined);
@@ -66,7 +71,7 @@ describe("Persist module", function foo() {
       const db = await Database.getInstance();
       await Persist.removePanL(panlUUID);
       await Persist.removePanL(fakeUUID);
-      const room = await Persist.findRoom(panlUUID);
+      const room = await Persist.findPanlRoom(panlUUID);
       await db.stop();
       assert(room === undefined);
     });

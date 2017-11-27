@@ -119,7 +119,7 @@ export class PanLService implements IAgentEvent, IPanLEvent, ICalendarEvent {
   }
 
   public async onReportUUID(path: PanLPath, uuid: Buffer): Promise<void> {
-    const room = await Persist.findRoom(uuid);
+    const room = await Persist.findPanlRoom(uuid);
 
     if (room !== undefined) {
       log.verbose(`Connect ${path} to room ${room.name}`);

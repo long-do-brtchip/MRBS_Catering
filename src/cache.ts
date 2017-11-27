@@ -4,9 +4,10 @@ import {
   ITimelineRequest, ITimePoint,
 } from "./calendar";
 import {Database} from "./database";
+import {Room} from "./entity/hub/room";
 import {log} from "./log";
 import {PanLPath} from "./path";
-import {IRoom, Persist} from "./persist";
+import {Persist} from "./persist";
 import {Time} from "./time";
 
 declare type PendingHandler = (path: PanLPath) => void;
@@ -143,7 +144,7 @@ export class Cache {
     this.client.del(Cache.PENDING_KEY);
   }
 
-  public async addConfigured(path: PanLPath, room: IRoom): Promise<void> {
+  public async addConfigured(path: PanLPath, room: Room): Promise<void> {
     if (await this.client.exists(Cache.pathToIdKey(path))) {
       const id = await this.client.get(Cache.pathToIdKey(path));
       this.client.del(Cache.pathToIdKey(path));

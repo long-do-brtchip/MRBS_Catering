@@ -3,6 +3,7 @@ import chaiAsPromised = require("chai-as-promised");
 import {Cache} from "../../src/cache";
 import {CalendarManager, ITimePoint} from "../../src/calendar";
 import {Database} from "../../src/database";
+import {Room} from "../../src/entity/hub/room";
 import {PanLPath} from "../../src/path";
 import {CalendarType, Persist} from "../../src/persist";
 import {ICalendarEvent} from "../../src/service";
@@ -47,10 +48,8 @@ describe("EWS module", () => {
     cache = await Cache.getInstance();
     await cache.flush();
     cache.setExpiry(15);
-    cache.addConfigured(path1, {
-      address: "tokyo@hanhzz.onmicrosoft.com",
-      name: "Tokyo Room",
-    });
+    cache.addConfigured(path1, new Room(
+      "tokyo@hanhzz.onmicrosoft.com", "Tokyo Room"));
 
     db = await Database.getInstance();
 

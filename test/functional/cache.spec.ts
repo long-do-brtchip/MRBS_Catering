@@ -1,6 +1,7 @@
 import {assert, expect, use} from "chai";
 import chaiAsPromised = require("chai-as-promised");
 import {Cache} from "../../src/cache";
+import {Room} from "../../src/entity/hub/room";
 import {PanLPath} from "../../src/path";
 import {sleep} from "../../utils/testUtil";
 
@@ -76,12 +77,12 @@ describe("Cache module", () => {
       const path4 = new PanLPath(1, 4);
       await cache.addUnconfigured(path1,
         new Buffer([0x04, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08]));
-      await cache.addConfigured(
-        path1, {address: "test1@ftdi.local", name: "Test Room 1"});
-      await cache.addConfigured(
-        path2, {address: "test2@ftdi.local", name: "Test Room 2"});
-      await cache.addConfigured(
-        path4, {address: "test4@ftdi.local", name: "Test Room 4"});
+      await cache.addConfigured(path1,
+        new Room("test1@ftdi.local", "Test Room 1"));
+      await cache.addConfigured(path2,
+        new Room("test2@ftdi.local", "Test Room 2"));
+      await cache.addConfigured(path4,
+        new Room("test4@ftdi.local", "Test Room 4"));
       expect(await cache.getRoomAddress(path1)).equal("test1@ftdi.local");
       expect(await cache.getRoomAddress(path2)).equal("test2@ftdi.local");
       expect(await cache.getRoomName(path1)).equal("Test Room 1");

@@ -2,7 +2,8 @@ import express = require("express");
 import "reflect-metadata";
 import {Cache} from "./cache";
 import {Database} from "./database";
-import {Link} from "./entity/hub/link";
+import {Panl} from "./entity/hub/panl";
+import {Room} from "./entity/hub/room";
 import {log} from "./log";
 import {Persist} from "./persist";
 import {PanLService} from "./service";
@@ -10,12 +11,9 @@ import {PanLService} from "./service";
 export const api = express.Router();
 
 async function createRoom(address: string, name: string): Promise<boolean> {
-  const link = new Link();
-  link.address = address;
-  link.name = name;
-  link.uuid = "0";
+  const room = new Room(address, name);
   try {
-    await link.save();
+    await room.save();
     return true;
   } catch (err) {
     return false;
@@ -23,7 +21,7 @@ async function createRoom(address: string, name: string): Promise<boolean> {
 }
 
 api.route("/rooms").get(async (req, res) => {
-  const links = await Link.find();
+  const links = await Room.find();
   return res.json(links);
 }).post(async (req, res) => {
   if (req.body.address === undefined || req.body.name === undefined) {
@@ -42,8 +40,8 @@ api.route("/room/:address/:name").get(async (req, res) => {
 });
 
 api.route("/room/:address").all(async (req, res, next) => {
-  const link = await Link.findOne(
-    {where: {address : req.params.address}}) as Link;
+  const link = await Room.findOne(
+    {where: {address : req.params.address}});
   if (link === undefined) {
     return res.sendStatus(410);
   } else {
@@ -85,12 +83,12 @@ api.route("/panl/:id/:address").get(async (req, res) => {
 
   const [path, uuid] = panl;
   const db = await Database.getInstance();
-  if (undefined === await Persist.findRoomUuid(req.params.address)) {
+  const room = await Persist.findRoom(req.params.address);
+  if (room === undefined) {
     await db.stop();
     return res.status(410).send(`Invalid room address ${req.params.address}`);
   }
-
-  await Persist.linkPanL(uuid, req.params.address);
+  await Persist.linkPanL(uuid, room);
   const service = await PanLService.getInstance();
   await service.onReportUUID(path, uuid);
   await Promise.all([service.stop(), db.stop()]);
