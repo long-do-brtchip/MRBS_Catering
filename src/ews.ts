@@ -185,6 +185,12 @@ export class EWSCalendar implements ICalendar {
     return ErrorCode.ERROR_SUCCESS;
   }
 
+  public async isAttendeeInMeeting(path: PanLPath, id: ITimePoint,
+                                   email: string): Promise<boolean> {
+    // TODO: Query from Exchange server
+    return true;
+  }
+
   private async impersonationSupport(path: PanLPath) {
     this.service.ImpersonatedUserId =
       new ImpersonatedUserId(ConnectingIdType.SmtpAddress,

@@ -39,6 +39,8 @@ export interface ICalendar {
   cancelMeeting(path: PanLPath, id: ITimePoint, email: string):
   Promise<ErrorCode>;
   cancelUnclaimedMeeting(path: PanLPath, id: ITimePoint): Promise<ErrorCode>;
+  isAttendeeInMeeting(path: PanLPath, id: ITimePoint, email: string):
+  Promise<boolean>;
 }
 
 export interface ICalendarNotification {
@@ -106,7 +108,7 @@ export class CalendarManager implements ICalendarNotification {
     const email = await this.cache.getAuth(path);
     if (this.panlConfig.authAllowPasscode.extendMeeting ||
         this.panlConfig.authAllowRFID.extendMeeting) {
-      if (!await this.cache.validateAttendee(path, id, email)) {
+      if (!await this.calendar.isAttendeeInMeeting(path, id, email)) {
         return ErrorCode.ERROR_AUTH_ERROR;
       }
     }
@@ -120,7 +122,7 @@ export class CalendarManager implements ICalendarNotification {
     const email = await this.cache.getAuth(path);
     if (this.panlConfig.authAllowPasscode.endMeeting ||
         this.panlConfig.authAllowRFID.endMeeting) {
-      if (!await this.cache.validateAttendee(path, id, email)) {
+      if (!await this.calendar.isAttendeeInMeeting(path, id, email)) {
         return ErrorCode.ERROR_AUTH_ERROR;
       }
     }
@@ -135,7 +137,7 @@ export class CalendarManager implements ICalendarNotification {
     const email = await this.cache.getAuth(path);
     if (this.panlConfig.authAllowPasscode.cancelMeeting ||
         this.panlConfig.authAllowRFID.cancelMeeting) {
-      if (!await this.cache.validateAttendee(path, id, email)) {
+      if (!await this.calendar.isAttendeeInMeeting(path, id, email)) {
         return ErrorCode.ERROR_AUTH_ERROR;
       }
     }
@@ -149,7 +151,7 @@ export class CalendarManager implements ICalendarNotification {
     }
     if (this.panlConfig.authAllowPasscode.claimMeeting ||
         this.panlConfig.authAllowRFID.claimMeeting) {
-      if (!await this.cache.validateAttendee(path, id,
+      if (!await this.calendar.isAttendeeInMeeting(path, id,
         await this.cache.getAuth(path))) {
         return ErrorCode.ERROR_AUTH_ERROR;
       }

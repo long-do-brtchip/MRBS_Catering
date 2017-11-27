@@ -56,7 +56,6 @@ export class Cache {
   private static readonly TIMELINE_PREFIX = "timeline";
   private static readonly MEETING_PREFIX = "meeting";
   private static readonly MEETINGID_PREFIX = "meeting_id";
-  private static readonly ATTENDEE_PREFIX = "attendees";
 
   private static pathToIdKey(path: PanLPath): string {
     return `path-id:${path.uid}`;
@@ -93,11 +92,6 @@ export class Cache {
   private static meetingUID(path: PanLPath, id: ITimePoint): string {
     const dateStr = Time.dayOffsetToString(id.dayOffset);
     return `:${path.uid}:${dateStr}:${id.minutesOfDay}`;
-  }
-
-  private static attendeeKey(path: PanLPath, id: ITimePoint):
-  string {
-    return Cache.ATTENDEE_PREFIX + Cache.meetingUID(path, id);
   }
 
   private static hashMeetingKey(path: PanLPath, id: ITimePoint):
@@ -364,20 +358,6 @@ export class Cache {
     }
   }
 
-  public async setMeetingAttendees(path: PanLPath, id: ITimePoint,
-                                   attendees: string[]): Promise<void> {
-    const key = Cache.attendeeKey(path, id);
-    await this.client.del(key);
-    await this.client.sadd(key, attendees);
-  }
-
-  public async validateAttendee(path: PanLPath, id: ITimePoint,
-                                email: string): Promise<boolean> {
-    const key = Cache.attendeeKey(path, id);
-    const ret = await this.client.sismember(key, email);
-    return (ret === 1) ? true : false;
-  }
-
   private scan(pattern: string): Promise<string[]> {
     const self = this.client;
     return new Promise((resolve) => {
@@ -438,7 +418,6 @@ export class Cache {
 
   private async removeTimelineEntryAndRelatedInfo(uid: string): Promise<void> {
     await Promise.all([
-      this.client.del(Cache.ATTENDEE_PREFIX + uid),
       this.client.del(Cache.MEETINGID_PREFIX + uid),
       this.client.del(Cache.MEETING_PREFIX + uid),
       this.client.del(Cache.TIMELINE_PREFIX + uid),

@@ -8,8 +8,6 @@ import {PanLPath} from "./path";
 import {IHubConfig} from "./persist";
 
 export class MockupCalendar implements ICalendar {
-  private static readonly attendees = ["passcode@test.com", "rfid@test.com"];
-
   constructor(private notify: ICalendarNotification,
               private cache: Cache,
               private configHub: IHubConfig) {
@@ -25,7 +23,6 @@ export class MockupCalendar implements ICalendar {
     await Promise.all(entries.map((entry) => {
       const point: ITimePoint = {dayOffset, minutesOfDay: entry.start};
       return [
-        this.cache.setMeetingAttendees(path, point, MockupCalendar.attendees),
         this.cache.setMeetingInfo(path, point,
           {subject: `Test meeting ${dayOffset}`, organizer: "Tester"}),
       ];
@@ -38,7 +35,6 @@ export class MockupCalendar implements ICalendar {
                              email: string): Promise<ErrorCode> {
     const organizer = email ? email : "PanL";
     await Promise.all([
-      this.cache.setMeetingAttendees(path, id, MockupCalendar.attendees),
       this.cache.setTimelineEntry(path, id, duration),
       this.cache.setMeetingInfo(path, id, {
         subject: this.configHub.meetingSubject,
@@ -88,5 +84,11 @@ export class MockupCalendar implements ICalendar {
   public async cancelUnclaimedMeeting(path: PanLPath, id: ITimePoint):
   Promise<ErrorCode> {
     return this.cancelMeeting(path, id, "");
+  }
+
+  public async isAttendeeInMeeting(path: PanLPath, id: ITimePoint,
+                                   email: string): Promise<boolean> {
+    const attendees = ["passcode@test.com", "rfid@test.com"];
+    return -1 !== attendees.indexOf(email);
   }
 }
