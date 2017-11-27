@@ -70,6 +70,7 @@ export class CalendarManager implements ICalendarNotification {
 
   public async getTimeline(path: PanLPath, req: ITimelineRequest):
   Promise<ITimelineEntry[]> {
+    await this.cache.setDayOffset(path, req.id.dayOffset);
     let entries = await this.cache.getTimeline(path, req);
     if (entries === undefined) {
       // get timeline from External server and cached
