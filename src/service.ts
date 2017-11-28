@@ -117,7 +117,7 @@ export class PanLService implements IAgentEvent, IPanLEvent, ICalendarEvent {
 
   public async onDeviceChange(id: number): Promise<void> {
     await PanLService.cache.removeAgent(id);
-    this.tx.broadcast(id, [MessageBuilder.buildUUID()]);
+    await this.onAgentConnected(id);
   }
 
   public async onReportUUID(path: PanLPath, uuid: Buffer): Promise<void> {
