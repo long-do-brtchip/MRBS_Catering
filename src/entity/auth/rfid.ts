@@ -1,14 +1,18 @@
 ﻿import { BaseEntity, Column, CreateDateColumn,
-     Entity, JoinColumn, OneToOne,
-     PrimaryColumn, UpdateDateColumn } from "typeorm";
+     Entity, ManyToOne,
+     PrimaryGeneratedColumn, UpdateDateColumn } from "typeorm";
 import { Employee } from "./employee";
 // Name, creation time, update time, RFID code, Passcode, email id, employee id
 @Entity()
 export class Rfid extends BaseEntity {
-    @PrimaryColumn("blob")
+    @PrimaryGeneratedColumn()
+    public id: number;
+
+    @Column("blob")
     public rfidcode: Buffer;
 
-    @OneToOne((type) => Employee)
-    @JoinColumn()
+    @ManyToOne((type) => Employee, (employee) => employee.rfid,
+        { onDelete: "CASCADE" },
+    )
     public employee: Employee;
 }

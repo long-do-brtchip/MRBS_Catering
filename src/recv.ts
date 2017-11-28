@@ -94,12 +94,16 @@ export class MessageParser {
           await this.panlEvt.onRequestFirmware(this.path);
           break;
         case Incoming.AUTH_BY_PASSCODE:
+          log.debug("AUTH_BY_PASSCODE");
           next = MessageParser.verifyLength(buffer, StructAuthByPasscode.size);
           await this.panlEvt.onPasscode(this.path,
             StructAuthByPasscode(buffer).passcode);
           break;
         case Incoming.AUTH_BY_RFID:
-          throw new Error("Method not implemented.");
+          log.debug("AUTH_BY_RFID");
+          next = MessageParser.verifyLength(buffer, 11);
+          await this.panlEvt.onRfid(this.path, buffer);
+          break;
         case Incoming.SET_ADDRESS:
           next = MessageParser.verifyLength(buffer, 1);
           this.path = new PanLPath(this.id, buffer[0]);

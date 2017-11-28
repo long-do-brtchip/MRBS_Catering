@@ -22,6 +22,7 @@ export interface IPanLEvent {
   onGetTime(path: PanLPath): Promise<void>;
   onRequestFirmware(path: PanLPath): Promise<void>;
   onPasscode(path: PanLPath, code: number): Promise<void>;
+  onRfid(path: PanLPath, rfid: Buffer): Promise<void>;
   onGetTimeline(path: PanLPath, req: ITimelineRequest): Promise<void>;
   onGetMeetingInfo(path: PanLPath, minutesOfDay: number, getBody: boolean):
   Promise<void>;
@@ -148,6 +149,17 @@ export class PanLService implements IAgentEvent, IPanLEvent, ICalendarEvent {
 
   public async onPasscode(path: PanLPath, code: number): Promise<void> {
     const email = await Auth.authByPasscode(code);
+
+    if (email.length === 0) {
+      const msg = [MessageBuilder.buildErrorCode(ErrorCode.ERROR_AUTH_ERROR)];
+      this.tx.send(path, msg);
+      return;
+    }
+    await PanLService.cache.setAuthSuccess(path, email);
+  }
+
+  public async onRfid(path: PanLPath, code: Buffer): Promise<void> {
+    const email = await Auth.authByRFID(code);
 
     if (email.length === 0) {
       const msg = [MessageBuilder.buildErrorCode(ErrorCode.ERROR_AUTH_ERROR)];
