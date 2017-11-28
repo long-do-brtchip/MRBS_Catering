@@ -34,6 +34,21 @@ export class Auth {
     await passCode.save();
   }
 
+  public static async addRfid(rfidcode: Buffer):
+  Promise<void> {
+    const rfid = new Rfid();
+    log.debug("buffer " + rfidcode);
+    rfid.rfidcode = rfidcode;
+    await rfid.save();
+  }
+
+  public static async addPasscode(inPassCode: number):
+  Promise<void> {
+    const passCode = new PassCode();
+    passCode.passcode = inPassCode;
+    await passCode.save();
+  }
+
   public static async authByPasscode(code: number): Promise<string> {
     const emp = await PassCode.findOne(
       {where: {passcode: code}, relations: ["employee"]});
