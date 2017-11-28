@@ -1,6 +1,7 @@
 import {IsEmail} from "class-validator";
-import {BaseEntity, Column, Entity,
-        Index, PrimaryColumn} from "typeorm";
+import {BaseEntity, Column, Entity, OneToMany,
+        PrimaryGeneratedColumn} from "typeorm";
+import {Rfid} from "./rfid";
 
 @Entity()
 export class Employee extends BaseEntity {
@@ -10,4 +11,11 @@ export class Employee extends BaseEntity {
 
   @Column()
   public name: string;
+
+  @Column()
+  @IsEmail()
+  public email: string;
+
+  @OneToMany((type) => Rfid, (rfid) => rfid.employee)
+  public rfid: Rfid[];
 }

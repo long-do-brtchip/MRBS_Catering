@@ -3,7 +3,7 @@ import {Server} from "http";
 import * as path from "path";
 import {api} from "./api";
 import {log} from "./log";
-import {rfidapi} from "./rfidapi";
+import {authapi} from "./authapi";
 
 export class HttpServer {
   public static getInstance(): HttpServer {
@@ -25,7 +25,7 @@ export class HttpServer {
     this.app.use(express.urlencoded({extended: true}));
     this.app.use(express.json());
     this.app.use("/api", api);
-    this.app.use("/rfidapi", authapi);
+    this.app.use("/authapi", authapi);
     this.app.use(express.static("web/dist"));
     this.app.get("/", (req, res) => {
       res.sendFile(path.resolve("web/dist/index.html"));

@@ -161,6 +161,17 @@ export class PanLService implements IAgentEvent, IPanLEvent, ICalendarEvent {
     await this.processAuthResult(path, await Auth.authByRFID(epc));
   }
 
+  public async onRfid(path: PanLPath, code: Buffer): Promise<void> {
+    const email = await Auth.authByRFID(code);
+
+    if (email.length === 0) {
+      const msg = [MessageBuilder.buildErrorCode(ErrorCode.ERROR_AUTH_ERROR)];
+      this.tx.send(path, msg);
+      return;
+    }
+    await PanLService.cache.setAuthSuccess(path, email);
+  }
+
   public async onGetTimeline(
     path: PanLPath, req: ITimelineRequest): Promise<void> {
     try {

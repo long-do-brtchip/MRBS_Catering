@@ -1,4 +1,5 @@
 import "reflect-metadata";
+import {Database} from "./database";
 import {Employee} from "./entity/auth/employee";
 import {PassCode} from "./entity/auth/passcode";
 import {Rfid} from "./entity/auth/rfid";
@@ -21,6 +22,7 @@ export class Auth {
   public static async addRfid(rfidcode: Buffer):
   Promise<void> {
     const rfid = new Rfid();
+    log.debug("buffer " + rfidcode);
     rfid.rfidcode = rfidcode;
     await rfid.save();
   }
@@ -33,27 +35,71 @@ export class Auth {
   }
 
   public static async authByPasscode(code: number): Promise<string> {
-    const passCode = await PassCode.findOne(
-        {where: {passcode: code}}) as PassCode;
-    if (passCode === undefined) {
-        log.warn("Entry does not exist");
-        return "";
+    const emp = await PassCode.findOne(
+      {where: {passcode: code}, relations: ["employee"]});
+    if (emp === undefined) {
+      log.warn("Entry does not exist");
+      return "";
     } else {
-        const emp = await Employee.findOne(
-          {where: {id: passCode.employee.id}}) as Employee;
-        return emp.email;
+      return emp.employee.email;
     }
   }
 
-  public static async linkRFIDtoEmployee(empId: number, rfid: number):
+  public static async authByRFID(epc: Buffer): Promise<string> {
+    const emp = await Rfid.findOne(
+      {where: {rfidcode: this.convertBufferToString(epc)},
+      relations: ["employee"]});
+    if (emp === undefined) {
+      log.warn("Entry does not exist");
+      return "";
+    } else {
+      return emp.employee.email;      
+    }
+  }
+
+  public static async linkPassCodetoEmployee(empId: number, code: number):
   Promise<void> {
     const emp = await Employee.findOne(
         {where: {id: empId}}) as Employee;
-    const varRfid = await Rfid.findOne(
-        {where: {id: rfid}}) as Rfid;
+    const passCode = await PassCode.findOne(
+        {where: {passcode: code}}) as PassCode;
     // Link RFID to Employee
-    varRfid.employee = emp;
-    await varRfid.save();
+    passCode.employee = emp;
+    await passCode.save();
+  }
+
+  public static async linkRFIDtoEmployee(empId: number, rfidId: number):
+  Promise<number> {
+    const emp = await Employee.findOne(
+        {where: {id: empId}}) as Employee;
+    const rfid = await Rfid.findOne(
+        {where: {id: rfidId}}) as Rfid;
+    if (rfid === undefined) {
+        log.warn("no rfid");
+        return 2;
+    } else if (emp === undefined) {
+        log.warn("no rfid");
+        return 1;
+    } else {
+        rfid.employee = emp;
+        await rfid.save();
+        return 0;
+    }
+  }
+
+  public static decimalToHexString(input: any): number {
+    if (input < 0) {
+        input = 0xFF + input + 1;
+    }
+    return input.toString(16);
+  }
+
+  public static convertBufferToString(input: Buffer): string {
+    let retString = this.decimalToHexString(input[0]);
+    for (let i = 1; i < input.length; i++) {
+        retString = retString + this.decimalToHexString(input[i]);
+    }
+    return retString.toString();
   }
 
   public async linkPassCodetoEmployee(empId: number, code: number):
@@ -83,7 +129,7 @@ export class Auth {
     return retString;
   }
 
-  public async modifyRfid(empID: Employee, rfidcode: Buffer, passcode: number):
+  public async modifyRfid(empID: Employee, rfidcode: Buffer):
   Promise<string> {
     let retString = "Update success!";
     const rfid = await Rfid.findOne(
@@ -105,7 +151,7 @@ export class Auth {
         {where: {employee: empID.id}}) as PassCode;
     if (passCode !== undefined) {
         passCode.passcode = passcode;
-      await passCode.save();
+        await passCode.save();
     } else {
         log.warn("Cannot find Employee");
         retString = "";
