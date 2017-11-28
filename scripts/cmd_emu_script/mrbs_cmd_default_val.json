@@ -1,0 +1,142 @@
+{
+    "set_address_2agent":16,
+    "set_power_off":0,
+    "set_timeout" : 50,
+    "set_local_time" :      { 
+                                "seconds_of_day":0, 
+                                "day":10, 
+                                "month":12, 
+                                "year":0 
+                            },
+
+    "set_time_format" :     { 
+                                "standard_time":0, 
+                                "military_time":1 
+                            },
+
+    "set_expected_firmware_version" : "0x0001",
+
+    "write_asserts" :       {
+                                "path_len":14, 
+                                "path":"/Document/file", 
+                                "data_len":19, 
+                                "data":"This is assert data" 
+                            },
+
+    "write_firmware" :      { 
+                                "data_len":5, 
+                                "data":"12345"
+                            },
+    "set_langid" : 1,
+
+    "set_room_size" : 100,
+
+    "set_room_equipments" : { 
+                                "project":1, 
+                                "video_conference":1, 
+                                "audio_conference":1, 
+                                "tv":1, 
+                                "laptop":1, 
+                                "pc":1, 
+                                "reserved":0 
+                            },
+
+    "set_access_right" :    { 
+                                "disable_extend_meeting" : 0,
+                                "disable_claim_meeting" : 0,
+                                "disable_cancel_meeting" : 0,
+                                "disable_future_booking" : 0,
+                                "disable_on_spot_booking" : 0,
+                                "disable_end_meeting" : 0,
+                                "disable_auth" : 0,
+                                "reserved" : 0
+                            },
+
+    "set_hardware_feature" : { 
+                                "mute":1, 
+                                "led_off":1, 
+                                "rfid_off":1, 
+                                "reserved":1
+                            },
+
+    "set_backlight" :1,
+
+    "set_room_name" :       { 
+                                "room_name_length":12, 
+                                "room_name":"Metting room"
+                            },
+
+    "set_timeline" :        { 
+                                "day_offset":0, 
+                                "count":10, 
+                                "busy":
+                                [
+                                    {"start_time":420  , "end_time":480},
+                                    {"start_time":480  , "end_time":540},
+                                    {"start_time":540  , "end_time":600},
+                                    {"start_time":600  , "end_time":660},
+                                    {"start_time":660  , "end_time":720},
+                                    {"start_time":720  , "end_time":780},
+                                    {"start_time":780  , "end_time":840},
+                                    {"start_time":840  , "end_time":900},
+                                    {"start_time":900  , "end_time":960},
+                                    {"start_time":960  , "end_time":1020},
+                                    {"start_time":1020 , "end_time":1080},
+                                    {"start_time":1080 , "end_time":1140}
+                                ]
+                            },
+
+    "on_extend_meeting":    {
+                                "day_offset" : 0,
+                                "start_time"  : 600,
+                                "new_duration": 15
+                            },
+
+    "on_add_meeting":       {
+                                "day_offset" : 0,
+                                "start_time"  : 600,
+                                "duration": 5
+                            },
+
+    "on_del_meeting":       {
+                                "day_offset" : 0,
+                                "start_time"  : 600
+                            },
+
+    "on_update_meeting":    {
+                                "day_offset" : 0,
+                                "start_time"  : 600
+                            },
+
+    "update_timeline" : { },
+    "set_meeting_info" :    { 
+                                "subject_lenght":10,
+                                "oganizer_length":10,
+                                "utf8":"Love Cafe Tri Truong"
+                            },
+
+    "set_meeting_body" :    { 
+                                "body_length":27, 
+                                "utf8":"Cafe is good for programmer"
+                            },
+
+    "set_error_code" : 255,
+
+    "get_uuid" : { },
+
+    "set_unconfigured_id" : 1234,
+
+    "set_panel_power" : { },
+
+    "cmd_set_attr" : { },
+
+    "report_error_code":10,
+
+    "on_move_metting":      {
+                                "previous_day_offset" : 0,
+                                "previous_start_time" : 10,
+                                "now_day_offset" : 0,
+                                "now_start_time" : 10,
+                                "duration" : 0
+                            }
+}

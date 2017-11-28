@@ -1,0 +1,15 @@
+{
+    "Agent_Info": {
+        "uuid":"01:02:03:04:05:06:07:08",
+        "ver":"0xCAFECAFE"
+    },
+
+    "HUB_Info": {
+        "host":"127.0.0.1",
+        "port":63441
+    },
+
+    "PanL70_Info": {
+        "mac":16
+    }
+}

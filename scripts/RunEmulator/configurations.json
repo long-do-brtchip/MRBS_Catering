@@ -1,0 +1,26 @@
+{
+    "panl70_emulator_app_dir":"D:\\MRBS_PanL70\\panl70\\MRBS_PanL_Display\\MRBS_PanL_Emulator\\Debug\\MRBS_PanL_Emulator.exe",
+
+    "agent_app_dir":"D:\\MRBS_Agent\\agent\\mrbsagent.exe",
+
+    "mrbs_hub_dir":"D:\\MRBS_Agent\\agent\\mrbshub_test.exe",
+
+    "agent":
+    [
+        {
+            "agent_info": { "hub_port": "633441", "bacnet_port":"9999", "hub_ip":"127.0.0.1", "mac": "10" },
+
+            "panl70_info":
+            [
+                { "uuid": "01:02:03:04:05:06:07:01", "mac": "01" },
+                { "uuid": "01:02:03:04:05:06:07:02", "mac": "02" },
+                { "uuid": "01:02:03:04:05:06:07:03", "mac": "03" },
+                { "uuid": "01:02:03:04:05:06:07:04", "mac": "04" },
+                { "uuid": "01:02:03:04:05:06:07:05", "mac": "05" },
+                { "uuid": "01:02:03:04:05:06:07:06", "mac": "06" },
+                { "uuid": "01:02:03:04:05:06:07:07", "mac": "07" },
+                { "uuid": "01:02:03:04:05:06:07:08", "mac": "08" }
+            ]
+        }
+    ]
+}
