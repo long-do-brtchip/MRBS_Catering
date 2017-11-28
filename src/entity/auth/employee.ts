@@ -5,9 +5,8 @@ import {Rfid} from "./rfid";
 
 @Entity()
 export class Employee extends BaseEntity {
-  @PrimaryColumn()
-  @IsEmail()
-  public email: string;
+  @PrimaryGeneratedColumn()
+  public id: number;
 
   @Column()
   public name: string;
