@@ -6,9 +6,6 @@ import {Rfid} from "./entity/auth/rfid";
 import {log} from "./log";
 
 export class Database {
-  public static repoPassCode: any;
-  public static repoRfid: any;
-
   public static async getInstance(): Promise<Database> {
     if (Database.instance === undefined) {
       log.verbose("Database connections created");
@@ -17,7 +14,7 @@ export class Database {
       Employee.useConnection(conn);
       PassCode.useConnection(conn);
       Rfid.useConnection(conn);
-    } else {
+      } else {
       Database.instance.addRef();
     }
     return Database.instance;

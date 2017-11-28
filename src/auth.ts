@@ -22,6 +22,7 @@ export class Auth {
   public static async addRfid(rfidcode: Buffer):
   Promise<void> {
     const rfid = new Rfid();
+    log.debug("buffer " + rfidcode);
     rfid.rfidcode = rfidcode;
     await rfid.save();
   }
