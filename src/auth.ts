@@ -22,7 +22,6 @@ export class Auth {
   public static async addRfid(rfidcode: Buffer):
   Promise<void> {
     const rfid = new Rfid();
-    log.debug("buffer " + rfidcode);
     rfid.rfidcode = rfidcode;
     await rfid.save();
   }
@@ -102,7 +101,10 @@ export class Auth {
     return retString.toString();
   }
 
+<<<<<<< HEAD
 
+=======
+>>>>>>> Remove redundant source code caused by auto-merged
   public async modifyEmployee(id: number, email: string, name: string):
   Promise<string> {
     let retString = "Update success!";
