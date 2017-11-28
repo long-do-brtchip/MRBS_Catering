@@ -291,9 +291,9 @@ export class PanLService implements IAgentEvent, IPanLEvent, ICalendarEvent {
       MessageBuilder.buildUUID(),
       MessageBuilder.buildLangID(),
       MessageBuilder.buildTimeFormat(),
+      MessageBuilder.buildAccessRight(await Persist.getPanlConfig()),
       // Build SetTime at last to minimize the latency
       MessageBuilder.buildTime(),
-      MessageBuilder.buildAccessRight(await Persist.getPanlConfig()),
     ];
     /* Broadcast init settings to single agent */
     try {
