@@ -111,6 +111,7 @@ export class MessageParser {
         case Incoming.AUTH_BY_RFID:
           [buf, next] = await this.waitBuf(next, StructAuthByRFID.size);
           await this.panlEvt.onRFID(this.path, buf);
+          break;
         case Incoming.SET_ADDRESS:
           [buf, next] = await this.waitBuf(next, 1);
           this.path = new PanLPath(this.id, buf[0]);
