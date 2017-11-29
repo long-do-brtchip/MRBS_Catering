@@ -121,6 +121,46 @@ authapi.route("/rfid/:empId/:rfid").post(async (req, res) => {
     }
 });
 
+// Modify Employee
+authapi.route("/employee/:id/:name/:email").patch(async (req, res) => {
+    const employee = await Employee.findOne(
+        {where: {id: req.params.id}}) as Employee;
+    if (employee !== undefined) {
+      employee.name = req.params.name;
+      employee.email = req.params.email;
+      await employee.save();
+      res.sendStatus(200);
+    } else {
+        res.status(404).send("Employee does not exist!");
+    }
+});
+
+// Modify Rfid
+authapi.route("/rfid/:id/:rfid").patch(async (req, res) => {
+  const rfid = await Rfid.findOne(
+      {where: {id: req.params.id}}) as Rfid;
+  if (rfid !== undefined) {
+    rfid.rfidcode = req.params.rfid;
+    await rfid.save();
+    res.sendStatus(200);
+  } else {
+      res.status(404).send("Rfid ID does not exist!");
+  }
+});
+
+// Modify Passcode
+authapi.route("/passcode/:oldcode/:newcode").patch(async (req, res) => {
+  const passcode = await PassCode.findOne(
+      {where: {passcode: req.params.oldcode}}) as PassCode;
+  if (passcode !== undefined) {
+    passcode.passcode = req.params.newcode;
+    await passcode.save();
+    res.sendStatus(200);
+  } else {
+      res.status(404).send("Passcode does not exist!");
+  }
+});
+
 // Remove Employee
 authapi.route("/employee/:id").delete(async (req, res) => {
     const employee = await Employee.findOne(
@@ -142,5 +182,17 @@ authapi.route("/rfid/:rfidcode").delete(async (req, res) => {
       res.sendStatus(200);
     } else {
         res.status(404).send("Rfid does not exist!");
+    }
+});
+
+// Remove Passcode
+authapi.route("/passcode/:code").delete(async (req, res) => {
+    const passcode = await Rfid.findOne(
+        {where: {passcode: req.params.code}}) as PassCode;
+    if (passcode !== undefined) {
+        passcode.remove();
+      res.sendStatus(200);
+    } else {
+        res.status(404).send("Passcode does not exist!");
     }
 });
