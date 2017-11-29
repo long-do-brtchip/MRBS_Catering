@@ -232,8 +232,6 @@ export class EWSCalendar implements ICalendar {
 
   private async handleNotification(uid: string, type: EventType):
   Promise<void> {
-    const minuteBased =
-     (x: number) => moment(x).second(0).millisecond(0).valueOf();
     let appt;
     try {
       appt = await Appointment.Bind(this.service, new ItemId(uid));
@@ -252,8 +250,8 @@ export class EWSCalendar implements ICalendar {
       organizer: appt.Organizer.Name,
     };
     const entry = {
-      start: minuteBased(appt.Start.TotalMilliSeconds),
-      end: minuteBased(appt.End.TotalMilliSeconds),
+      start: EWSCalendar.minuteBased(appt.Start.TotalMilliSeconds),
+      end: EWSCalendar.minuteBased(appt.End.TotalMilliSeconds),
     };
     if (type === EventType.Created) {
       log.error("TODO: get meeting room address");
