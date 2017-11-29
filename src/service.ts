@@ -70,6 +70,7 @@ export class PanLService implements IAgentEvent, IPanLEvent, ICalendarEvent {
 
   private tx: Transmit;
   private cal: CalendarManager;
+  private newDayJob: NodeJS.Timer;
 
   private constructor(private hub: IHubConfig, private panl: IPanlConfig,
                       private refCnt = 1) {
@@ -81,6 +82,7 @@ export class PanLService implements IAgentEvent, IPanLEvent, ICalendarEvent {
 
   public async stop(): Promise<void> {
     if (--this.refCnt === 0) {
+      clearTimeout(this.newDayJob);
       await this.tx.stop();
       await this.cal.disconnect();
       await PanLService.cache.stop();
@@ -390,7 +392,8 @@ export class PanLService implements IAgentEvent, IPanLEvent, ICalendarEvent {
 
   private setupNewDayTask(): void {
     const now = moment();
-    setTimeout(this.onNewDayTask.bind(this), moment().endOf("day").diff(now));
+    this.newDayJob = setTimeout(
+      this.onNewDayTask.bind(this), moment().endOf("day").diff(now));
   }
 
   private addRef(): void {
