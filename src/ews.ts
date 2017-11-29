@@ -35,7 +35,7 @@ export class EWSCalendar implements ICalendar {
     EwsLogging.DebugLogEnabled = false;
     // TODO: auto detect exchange server version
 
-    this.service = new ExchangeService(ExchangeVersion.Exchange2010);
+    this.service = new ExchangeService(ExchangeVersion.Exchange2013);
     this.service.Credentials = new WebCredentials(
       config.username, config.password);
     this.service.Url = new Uri(config.address);
@@ -88,37 +88,41 @@ export class EWSCalendar implements ICalendar {
                              email: string): Promise<ErrorCode> {
     await this.impersonationSupport(path);
 
-    // Create the appointment.
-    const appointment = new Appointment(this.service);
-    const roomName = await this.cache.getRoomName(path);
-    const roomAddress = await this.cache.getRoomAddress(path);
-    const msStart = Time.getMiliseconds(id.dayOffset, id.minutesOfDay);
+    try {
+      // Create the appointment.
+      const appointment = new Appointment(this.service);
+      const roomName = await this.cache.getRoomName(path);
+      const roomAddress = await this.cache.getRoomAddress(path);
+      const msStart = Time.getMiliseconds(id.dayOffset, id.minutesOfDay);
 
-    // Set properties on the appointment.
-    appointment.Subject = this.configHub.meetingSubject;
-    appointment.Start = new DateTime(msStart);
-    appointment.End = new DateTime(Time.extendTime(msStart, duration));
-    appointment.Location = roomName;
-    // cancel meeting required
-    appointment.RequiredAttendees.Add(roomAddress);
+      // Set properties on the appointment.
+      appointment.Subject = this.configHub.meetingSubject;
+      appointment.Start = new DateTime(msStart);
+      appointment.End = new DateTime(Time.extendTime(msStart, duration));
+      appointment.Location = roomName;
+      // cancel meeting required
+      appointment.RequiredAttendees.Add(roomAddress);
 
-    // Save the meeting to the Calendar folder and send the meeting request.
-    await appointment.Save(SendInvitationsMode.SendToNone);
+      // Save the meeting to the Calendar folder and send the meeting request.
+      await appointment.Save(SendInvitationsMode.SendToNone);
 
-    // Verify that the meeting was created.
-    // let item = await Item.Bind(this.service, appointment.Id, new
-    // PropertySet(ItemSchema.Subject));
-    // TODO: Set correct error code
-    return ErrorCode.ERROR_SUCCESS;
+      // Verify that the meeting was created.
+      // let item = await Item.Bind(this.service, appointment.Id, new
+      // PropertySet(ItemSchema.Subject));
+      return ErrorCode.ERROR_SUCCESS;
+    } catch (error) {
+      log.error("EWSCalendar.createBooking():: ", error.message);
+      return this.parseErrorCode(error);
+    }
   }
 
   public async extendMeeting(path: PanLPath, id: ITimePoint, duration: number,
                              email: string): Promise<ErrorCode> {
-    await this.impersonationSupport(path);
-
-    const meetingId = await this.cache.getMeetingId(path, id);
-    const appointmentId = new ItemId(meetingId);
     try {
+      await this.impersonationSupport(path);
+
+      const meetingId = await this.cache.getMeetingId(path, id);
+      const appointmentId = new ItemId(meetingId);
       // Instantiate an meeting object by binding to it by using the ItemId.
       const appointment = await Appointment.Bind(this.service, appointmentId);
 
@@ -136,23 +140,22 @@ export class EWSCalendar implements ICalendar {
       await appointment.Update(ConflictResolutionMode.AlwaysOverwrite, mode);
       return ErrorCode.ERROR_SUCCESS;
     } catch (error) {
-      // TODO: Set correct error code
-      throw new Error(error.message);
+      log.error("EWSCalendar.extendMeeting():: ", error.message);
+      return this.parseErrorCode(error);
     }
   }
 
   public async endMeeting(path: PanLPath, id: ITimePoint, email: string):
   Promise<ErrorCode> {
-    await this.impersonationSupport(path);
-
-    const meetingId = await this.cache.getMeetingId(path, id);
-    const appointmentId = new ItemId(meetingId);
-
     try {
+      await this.impersonationSupport(path);
+
+      const meetingId = await this.cache.getMeetingId(path, id);
+      const appointmentId = new ItemId(meetingId);
       // Instantiate an meeting object by binding to it by using the ItemId.
       const appointment = await Appointment.Bind(this.service, appointmentId);
 
-      appointment.End = DateTime.Now;
+      appointment.End = DateTime.Now.Date.AddHours(-1);
 
       // Unless explicitly specified, the default is to use SendToAllAndSave..
       // This can convert an appointment into a meeting. To avoid this,
@@ -165,19 +168,18 @@ export class EWSCalendar implements ICalendar {
       await appointment.Update(ConflictResolutionMode.AlwaysOverwrite, mode);
       return ErrorCode.ERROR_SUCCESS;
     } catch (error) {
-      // TODO: Set correct error code
-      throw new Error(error.message);
+      log.error("EWSCalendar.endMeeting():: ", error.message);
+      return this.parseErrorCode(error);
     }
   }
 
   public async cancelMeeting(path: PanLPath, id: ITimePoint, email: string):
   Promise<ErrorCode> {
-    await this.impersonationSupport(path);
-
-    const meetingId = await this.cache.getMeetingId(path, id);
-    const appointmentId = new ItemId(meetingId);
-
     try {
+      await this.impersonationSupport(path);
+
+      const meetingId = await this.cache.getMeetingId(path, id);
+      const appointmentId = new ItemId(meetingId);
       // Instantiate an appointment object by binding to it using the ItemId.
       const meeting = await Appointment.Bind(this.service, appointmentId);
 
@@ -185,21 +187,45 @@ export class EWSCalendar implements ICalendar {
       await meeting.CancelMeeting();
       return ErrorCode.ERROR_SUCCESS;
     } catch (error) {
-      // TODO: Set correct error code
-      throw new Error(error.message);
+      log.error("EWSCalendar.cancelMeeting():: ", error.message);
+      return this.parseErrorCode(error);
     }
   }
 
   public async cancelUnclaimedMeeting(path: PanLPath, id: ITimePoint):
   Promise<ErrorCode> {
-    await this.cancelMeeting(path, id, "");
-    // TODO: Set correct error code
-    return ErrorCode.ERROR_SUCCESS;
+    return this.cancelMeeting(path, id, "");
   }
 
   public async isAttendeeInMeeting(path: PanLPath, id: ITimePoint,
                                    email: string): Promise<boolean> {
-    // TODO: Query from Exchange server
+    if (!email) {
+      return false;
+    }
+
+    try {
+      const meetingId = await this.cache.getMeetingId(path, id);
+      const appointmentId = new ItemId(meetingId);
+      // Instantiate an appointment object by binding to it using the ItemId.
+      const meeting = await Appointment.Bind(this.service, appointmentId);
+
+      let attendees = meeting.RequiredAttendees.GetEnumerator();
+      for (const attendee of attendees) {
+        if (attendee.Address.toLowerCase() === email.toLowerCase()) {
+          return true;
+        }
+      }
+      attendees = meeting.OptionalAttendees.GetEnumerator();
+      for (const attendee of attendees) {
+        if (attendee.Address.toLowerCase() === email.toLowerCase()) {
+          return true;
+        }
+      }
+    } catch (error) {
+      log.error("EWSCalendar.isAttendeeInMeeting():: ", error.message);
+    }
+
+    // return false;
     return true;
   }
 
@@ -218,11 +244,11 @@ export class EWSCalendar implements ICalendar {
     let duration = -1;
 
     try {
-      // Instantiate an appointment object by binding to it using the ItemId.
-      const meeting = await Appointment.Bind(this.service, appointmentId);
       // path throw exception if not existed
       ewsCache = await this.cache.getEwsCacheByMeetingId(meetingId);
       path = new PanLPath(ewsCache.agentID, ewsCache.mstpAddress);
+      // Instantiate an appointment object by binding to it using the ItemId.
+      const meeting = await Appointment.Bind(this.service, appointmentId);
       const {start, end} =
         this.parseToTimelineEntry(meeting.Start, meeting.End);
       const dayOffset = this.countDayOffset(meeting.Start);
@@ -269,32 +295,39 @@ export class EWSCalendar implements ICalendar {
         }
       }
     } catch (error) {
-      switch (error.code) {
-        case "TIMELINE_ENTRY_NOT_FOUND":
-          /*  Difficult to happen, because timeline entry and ewscache will
-              will expired same time
+      log.warn("[notify] have error: ", error.message);
+      if (error.code === ErrorCode.ERROR_CACHE_TIMELINE_ENTRY_NOT_FOUND) {
+        /*  Difficult to happen, because timeline entry and ewscache will
+            will expired same time
 
-              startTime update, remove old by timePointStr, add new by timePoint
-           */
-          const oldTimePoint = {
-            dayOffset: Time.convertToDayOffset(ewsCache.dayOffsetStr),
-            minutesOfDay: ewsCache.minutesOfDay,
-          };
+            startTime update, remove old by timePointStr, add new by timePoint
+         */
+        const oldTimePoint = {
+          dayOffset: Time.convertToDayOffset(ewsCache.dayOffsetStr),
+          minutesOfDay: ewsCache.minutesOfDay,
+        };
 
-          // remove timeline entry and related
-          this.notify.onDeleteNotification(path, oldTimePoint);
-          // notify to client
-          this.notify.onAddNotification(path, newTimePoint, duration);
+        // remove timeline entry and related
+        this.notify.onDeleteNotification(path, oldTimePoint);
+        // notify to client
+        this.notify.onAddNotification(path, newTimePoint, duration);
 
-          await Promise.all([
-            this.cache.setMeetingInfo(path, newTimePoint, newMeeting),
-            this.cache.setMeetingId(path, newTimePoint, meetingId),
-          ]);
+        await Promise.all([
+          this.cache.setMeetingInfo(path, newTimePoint, newMeeting),
+          this.cache.setMeetingId(path, newTimePoint, meetingId),
+        ]);
 
-          log.debug("[notify] modified start time");
-          break;
-        default:
-          log.warn("[notify] ", error.message);
+        log.debug("[notify] modified start time");
+      } else if (error.ErrorCode === 249 && ewsCache && ewsCache.dayOffsetStr) {
+        // remove cancel meeting
+        const oldTimePoint = {
+          dayOffset: Time.convertToDayOffset(ewsCache.dayOffsetStr),
+          minutesOfDay: ewsCache.minutesOfDay,
+        };
+        this.notify.onDeleteNotification(path, oldTimePoint);
+        log.debug("[notify] remove cancel meeting from cache");
+      } else {
+        log.debug("[notify] un-handle");
       }
     }
   }
@@ -364,5 +397,30 @@ export class EWSCalendar implements ICalendar {
       start: start.Hour * 60 + start.Minute,
       end: end.Hour * 60 + end.Minute,
     };
+  }
+
+  private parseErrorCode(error: any): ErrorCode {
+    if (error.code) {
+      return error.code;
+    }
+
+    switch (error.ErrorCode) {
+      case 1:
+        return ErrorCode.ERROR_ACCESS_DENIED;
+      case 24:
+        return ErrorCode.ERROR_ENDDATE_EARLIER_STARTDATA;
+      case 41:
+        return ErrorCode.ERROR_MUST_ORGANIZER;
+      case 161:
+        return ErrorCode.ERROR_MALFORMED_DATA;
+      case 203:
+        return ErrorCode.ERROR_SET_ACTION_INVALID_FOR_PROPERTY;
+      case 208:
+        return ErrorCode.ERROR_REQUIRED_RECIPIENT;
+      case 249:
+        return ErrorCode.ERROR_OBJECT_NOT_FOUND;
+      default:
+        return ErrorCode.ERROR_UNKNOWN;
+    }
   }
 }

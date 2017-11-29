@@ -1,4 +1,5 @@
 import * as redis from "ioredis";
+import {ErrorCode} from "./builder";
 import {
   IMeetingInfo, ITimelineEntry,
   ITimelineRequest, ITimePoint,
@@ -216,7 +217,8 @@ export class Cache {
   public async getRoomName(path: PanLPath): Promise<string> {
     const val = await this.client.get(Cache.nameKey(path));
     if (val === null) {
-      throw(new Error(`Can't find room name for ${path}`));
+      throw(new HubError(`Can't find room name for ${path}`,
+        ErrorCode.ERROR_CACHE_ROOMNAME_NOT_FOUND));
     }
     return val;
   }
@@ -224,7 +226,8 @@ export class Cache {
   public async getRoomAddress(path: PanLPath): Promise<string> {
     const val = await this.client.get(Cache.addressKey(path));
     if (val === null) {
-      throw(new Error(`Can't find room address for ${path}`));
+      throw(new HubError(`Can't find room address for ${path}`,
+        ErrorCode.ERROR_CACHE_ROOMADDRESS_NOT_FOUND));
     }
     return val;
   }
@@ -330,8 +333,8 @@ export class Cache {
     const key: string = Cache.hashTimelineKey(path, id);
     const result = await this.client.hgetall(key);
     if (!result || Object.keys(result).length === 0) {
-      throw(
-        new HubError("Timeline entry not found", "TIMELINE_ENTRY_NOT_FOUND"));
+      throw(new HubError("Timeline entry not found",
+          ErrorCode.ERROR_CACHE_TIMELINE_ENTRY_NOT_FOUND));
     }
     result.start = parseInt(result.start, 10);
     result.end = parseInt(result.end, 10);
@@ -343,7 +346,7 @@ export class Cache {
   Promise<void> {
     const uid = Cache.meetingUID(path, id);
     const shadowKey = Cache.SHADOW_PREFIX + Cache.hashTimelineKey(path, id);
-    Promise.all([
+    await Promise.all([
       this.client.del(shadowKey),
       this.removeTimelineEntryAndRelatedInfo(uid),
       ]);
@@ -360,7 +363,8 @@ export class Cache {
     const key = Cache.hashMeetingKey(path, id);
     const result: IMeetingInfo = await this.client.hgetall(key);
     if (!result || Object.keys(result).length === 0) {
-      throw new Error("Meeting info not found");
+      throw(new HubError("Meeting info not found",
+        ErrorCode.ERROR_CACHE_MEETINGINFO_NOT_FOUND));
     }
 
     return result;
@@ -371,7 +375,8 @@ export class Cache {
     const key = Cache.hashMeetingIdKey(path, id);
     const result: string = await this.client.get(key);
     if (!result) {
-      throw(new Error("Meeting Id not found"));
+      throw(new HubError("Meeting Id not found",
+        ErrorCode.ERROR_CACHE_MEETINGID_NOT_FOUND));
     }
 
     return result;
@@ -402,7 +407,8 @@ export class Cache {
     const result =
       await this.client.hgetall(Cache.meetingIdToPathKey(meetingId));
     if (!result || Object.keys(result).length === 0) {
-      throw(new HubError("ews cache not found", "EWS_CACHE_FOUND"));
+      throw(new HubError("ews cache not found",
+        ErrorCode.ERROR_CACHE_EWS_NOT_FOUND));
     }
 
     result.minutesOfDay = parseInt(result.minutesOfDay, 10);
