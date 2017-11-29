@@ -210,18 +210,6 @@ export class Cache {
     this.client.flushdb();
   }
 
-  public async setTimelineWindow(path: PanLPath, id: number): Promise<void> {
-    await this.client.set(Cache.windowKey(path), id);
-  }
-
-  public async getTimelineWindow(path: PanLPath): Promise<number> {
-    const val = this.client.get(Cache.windowKey(path));
-    if (val === null) {
-      return 0;
-    }
-    return Number(val);
-  }
-
   public async getRoomPanLs(room: string): Promise<PanLPath[]> {
     const panls = await this.client.get(room + Cache.PANLS_SUFFIX);
     const paths: PanLPath[] = [];

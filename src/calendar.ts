@@ -68,7 +68,6 @@ export class CalendarManager implements ICalendarNotification {
 
   public async getTimeline(path: PanLPath, req: ITimelineRequest):
   Promise<ITimelineEntry[]> {
-    await this.cache.setTimelineWindow(path, req.id);
     const room = await this.cache.getRoomAddress(path);
     let entries = await this.cache.getTimeline(room, req);
     if (entries === undefined) {

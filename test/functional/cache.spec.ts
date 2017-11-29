@@ -362,8 +362,4 @@ describe("Cache module", () => {
           .to.be.rejectedWith("Meeting info not found");
     }).timeout(8000);
   });
-  describe("Day Offset", () => {
-    it("should be able to setDayOffset");
-    it("should be able to getDayOffset");
-  });
 });
