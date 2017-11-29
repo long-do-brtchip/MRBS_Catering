@@ -328,12 +328,12 @@ export class PanLService implements IAgentEvent, IPanLEvent, ICalendarEvent {
       if (entries.length === 0) {
         this.tx.send(path, [
           ...MessageBuilder.buildRoomName(name),
-          ...MessageBuilder.buildTimeline(entries, 0),
+          ...MessageBuilder.buildTimeline(entries, epoch),
         ]);
       } else if (entries.length === 1) {
         this.tx.send(path, [
           ...MessageBuilder.buildRoomName(name),
-          ...MessageBuilder.buildTimeline(entries, 0),
+          ...MessageBuilder.buildTimeline(entries, epoch),
           ...MessageBuilder.buildMeetingInfo(
             await this.cal.getMeetingInfo(path, entries[0].start)),
         ]);
@@ -345,7 +345,7 @@ export class PanLService implements IAgentEvent, IPanLEvent, ICalendarEvent {
         ]);
         this.tx.send(path, [
           ...MessageBuilder.buildRoomName(name),
-          ...MessageBuilder.buildTimeline(entries, 0),
+          ...MessageBuilder.buildTimeline(entries, epoch),
           ...MessageBuilder.buildMeetingInfo(info[0]),
           ...MessageBuilder.buildMeetingInfo(info[1]),
         ]);
