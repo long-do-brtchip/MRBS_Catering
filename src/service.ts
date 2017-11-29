@@ -156,11 +156,10 @@ export class PanLService implements IAgentEvent, IPanLEvent, ICalendarEvent {
 
   public async onGetTimeline(
     path: PanLPath, req: ITimelineRequest): Promise<void> {
+    const method = req.lookForward ? "from" : "before";
+    log.debug(`Path ${path} requests ${req.maxCount} slots ${method} ` +
+      moment(req.id).calendar());
     try {
-      const datetime = moment(req.id).calendar();
-      const method = req.lookForward ? "from" : "before";
-      log.debug(`Path ${path} requests ${req.maxCount} slots ${method} ` +
-        datetime);
       this.tx.send(path, MessageBuilder.buildTimeline(
         await this.cal.getTimeline(path, req), req.id));
     } catch (err) {
@@ -173,6 +172,7 @@ export class PanLService implements IAgentEvent, IPanLEvent, ICalendarEvent {
     if (getBody) {
       log.error("TODO: Parameter getBody not implemented.");
     }
+    log.debug(`Path ${path} requests meeting info ${moment(id).calendar()}`);
     try {
       this.tx.send(path, MessageBuilder.buildMeetingInfo(
         await this.cal.getMeetingInfo(path, id)));
@@ -183,6 +183,8 @@ export class PanLService implements IAgentEvent, IPanLEvent, ICalendarEvent {
 
   public async onCreateBooking(path: PanLPath, entry: ITimelineEntry):
   Promise<void> {
+    log.debug(`Path ${path} create meeting for ` +
+      moment(entry.start).calendar());
     try {
       this.tx.send(path, [MessageBuilder.buildErrorCode(
         await this.cal.createBooking(path, entry))]);
@@ -193,6 +195,8 @@ export class PanLService implements IAgentEvent, IPanLEvent, ICalendarEvent {
 
   public async onExtendMeeting(path: PanLPath, entry: ITimelineEntry):
   Promise<void> {
+    log.debug(`Path ${path} extend meeting for ` +
+      moment(entry.start).calendar());
     try {
       this.tx.send(path, [MessageBuilder.buildErrorCode(
         await this.cal.extendMeeting(path, entry))]);
@@ -206,6 +210,7 @@ export class PanLService implements IAgentEvent, IPanLEvent, ICalendarEvent {
     if (path.dest === MessageBuilder.BROADCAST_ADDR) {
       log.error(`Invalid sender from agent ${path.agent}.`);
     }
+    log.debug(`Path ${path} cancel unclaimed for ${moment(id).calendar()}`);
     try {
       this.tx.send(path, [MessageBuilder.buildErrorCode(
         await this.cal.cancelUnclaimedMeeting(path, id))]);
@@ -216,6 +221,7 @@ export class PanLService implements IAgentEvent, IPanLEvent, ICalendarEvent {
 
   public async onEndMeeting(path: PanLPath, id: number):
   Promise<void> {
+    log.debug(`Path ${path} end meeting for ${moment(id).calendar()}`);
     try {
       this.tx.send(path, [MessageBuilder.buildErrorCode(
         await this.cal.endMeeting(path, id))]);
@@ -226,6 +232,7 @@ export class PanLService implements IAgentEvent, IPanLEvent, ICalendarEvent {
 
   public async onCancelMeeting(path: PanLPath, id: number):
   Promise<void> {
+    log.debug(`Path ${path} cancel meeting for ${moment(id).calendar()}`);
     try {
       this.tx.send(path, [MessageBuilder.buildErrorCode(
         await this.cal.cancelMeeting(path, id))]);
@@ -236,6 +243,7 @@ export class PanLService implements IAgentEvent, IPanLEvent, ICalendarEvent {
 
   public async onCheckClaimMeeting(path: PanLPath, id: number):
   Promise<void> {
+    log.debug(`Path ${path} want to claim for ${moment(id).calendar()}`);
     try {
       this.tx.send(path, [MessageBuilder.buildErrorCode(
         await this.cal.checkClaimMeeting(path, id))]);
