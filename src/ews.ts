@@ -27,7 +27,7 @@ export class EWSCalendar implements ICalendar {
       case 1:
         return ErrorCode.ERROR_ACCESS_DENIED;
       case 24:
-        return ErrorCode.ERROR_ENDDATE_EARLIER_STARTDATA;
+        return ErrorCode.ERROR_ENDDATE_EARLIER_STARTDATE;
       case 41:
         return ErrorCode.ERROR_MUST_ORGANIZER;
       case 161:
@@ -308,7 +308,11 @@ export class EWSCalendar implements ICalendar {
       log.error("EWS stream notification:::", args.Exception.Message);
     });
     // Auto reconnect
-    this.sub.OnDisconnect.push((conn) => conn.Open());
+    this.sub.OnDisconnect.push((conn) => {
+      if (!this.stopped) {
+        conn.Open();
+      }
+    });
     // Open connected
     if (!this.stopped) {
       this.sub.Open();
