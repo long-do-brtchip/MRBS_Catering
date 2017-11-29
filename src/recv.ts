@@ -82,6 +82,9 @@ export class MessageParser {
       }
     }
     when.minutesOfDay &= (1 << 11) - 1;
+    if (when.minutesOfDay >= 60 * 24) {
+      throw(new Error("Wrong minutesOfDay received: " + when.minutesOfDay));
+    }
     return now.startOf("day").add(offset, "days").set({
       hour: when.minutesOfDay / 60,
       minute: when.minutesOfDay % 60,
