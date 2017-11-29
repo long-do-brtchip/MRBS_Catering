@@ -91,4 +91,15 @@ describe("Mockup calendar module", () => {
       expect(entires.length).to.equal(1);
     });
   });
+  describe("meeting", () => {
+    it("should be able to create meeting", async () => {
+      const entry = {
+        start: moment().valueOf(),
+        end: moment().add(1, "hours").valueOf(),
+      };
+      await cache.setAuthSuccess(path, "rfid@test.com");
+      await cal.createBooking(path, entry);
+    });
+  });
+
 });

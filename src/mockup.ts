@@ -31,13 +31,10 @@ export class MockupCalendar implements ICalendar {
   public async createBooking(room: string, entry: ITimelineEntry,
                              email: string): Promise<ErrorCode> {
     const organizer = email ? email : "PanL";
-    await Promise.all([
-      this.cache.setTimelineEntry(room, entry),
-      this.cache.setMeetingInfo(room, entry.start, {
+    await this.cache.setMeetingInfo(room, entry.start, {
         subject: this.configHub.meetingSubject,
         organizer,
-      }),
-    ]);
+      });
     await this.notify.onAddNotification(room, entry);
     return ErrorCode.ERROR_SUCCESS;
   }
@@ -47,10 +44,7 @@ export class MockupCalendar implements ICalendar {
     const info = await this.cache.getMeetingInfo(room, entry.start);
     info.subject = email ? `Extended by ${email}: ${info.subject}` :
                    `Extended: ${info.subject}`;
-    await Promise.all([
-      this.cache.setTimelineEntry(room, entry),
-      this.cache.setMeetingInfo(room, entry.start, info),
-    ]);
+    await this.cache.setMeetingInfo(room, entry.start, info);
     await this.notify.onEndTimeChangeNofication(room, entry);
     return ErrorCode.ERROR_SUCCESS;
   }
@@ -64,17 +58,13 @@ export class MockupCalendar implements ICalendar {
     const info = await this.cache.getMeetingInfo(room, id);
     info.subject = email ? `Ended by ${email}: ${info.subject}` :
                    `Ended: ${info.subject}`;
-    await Promise.all([
-      this.cache.setTimelineEntry(room, entry),
-      this.cache.setMeetingInfo(room, id, info),
-    ]);
+    await this.cache.setMeetingInfo(room, id, info);
     await this.notify.onEndTimeChangeNofication(room, entry);
     return ErrorCode.ERROR_SUCCESS;
   }
 
   public async cancelMeeting(room: string, id: number, email: string):
   Promise<ErrorCode> {
-    await this.cache.removeTimelineEntry(room, id);
     await this.notify.onDeleteNotification(room, id);
     return ErrorCode.ERROR_SUCCESS;
   }

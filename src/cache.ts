@@ -211,7 +211,7 @@ export class Cache {
   }
 
   public async getRoomPanLs(room: string): Promise<PanLPath[]> {
-    const panls = await this.client.get(room + Cache.PANLS_SUFFIX);
+    const panls = await this.client.smembers(room + Cache.PANLS_SUFFIX);
     const paths: PanLPath[] = [];
     for (const panl of panls) {
       const t = JSON.parse(panl);
