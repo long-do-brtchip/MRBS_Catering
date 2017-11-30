@@ -32,8 +32,10 @@ export class Cache {
 
         const observer = new redis();
         observer.on("ready", async () => {
-          await observer.config("SET", "notify-keyspace-events", "Ex");
-          await observer.psubscribe("__keyevent@0__:expired");
+          await observer.config("SET", "notify-keyspace-events", "Kgx");
+          await observer.psubscribe(
+            `${Cache.KEYSPACE0_PREFIX}${Cache.SHADOW_PREFIX}*`,
+            `${Cache.KEYSPACE0_PREFIX}${Cache.PANLS_PREFIX}*`);
           Cache.instance = new Cache(client, observer);
           Cache.instance.setExpiry(config.expiry);
           resolve(Cache.instance);
@@ -57,10 +59,11 @@ export class Cache {
   private static readonly PENDING_KEY = "pending";
   private static readonly MEETINGUID_KEY = "meetingid";
   private static readonly ROOMNAME_KEY = "roomname:";
-  private static readonly PANLS_SUFFIX = ":panls";
+  private static readonly PANLS_PREFIX = "panls:";
   private static readonly SHADOW_PREFIX = "shadow:";
   private static readonly TIMELINE_PREFIX = "timeline:";
   private static readonly MEETING_PREFIX = "meeting:";
+  private static readonly KEYSPACE0_PREFIX = `__keyspace@0__:`;
 
   private static pathToIdKey(path: PanLPath): string {
     return `path-id:${path.uid}`;
@@ -82,10 +85,6 @@ export class Cache {
     return `agent:${agent}`;
   }
 
-  private static windowKey(path: PanLPath): string {
-    return `window:${path.uid}`;
-  }
-
   private static authKey(path: PanLPath): string {
     return `auth:${path.uid}`;
   }
@@ -100,11 +99,13 @@ export class Cache {
     return moment(id).format("HHmm");
   }
 
+  private roomSubsribers: IRoomStatusChange[] = [];
+
   private constructor(private client: redis.Redis,
                       private observer: redis.Redis,
                       private refCnt = 1,
                       private expiry = 0) {
-    this.setOnKeyExpired();
+    this.keyspaceNotificationProcess();
   }
 
   public async stop(): Promise<void> {
@@ -144,11 +145,16 @@ export class Cache {
       this.client.del(Cache.idToPathKey(id));
       this.client.del(Cache.idToUuidKey(id));
     }
+    if (!await this.client.exists(Cache.PANLS_PREFIX + room.address)) {
+      for (const subscriber of this.roomSubsribers) {
+        subscriber.onRoomOnline(room.address);
+      }
+    }
     await Promise.all([
       this.client.set(Cache.ROOMNAME_KEY + room.address, room.name),
       this.client.set(Cache.addressKey(path), room.address),
       this.client.sadd(Cache.agentKey(path.agent), path.dest),
-      this.client.sadd(room.address + Cache.PANLS_SUFFIX, JSON.stringify(path)),
+      this.client.sadd(Cache.PANLS_PREFIX + room.address, JSON.stringify(path)),
     ]);
   }
 
@@ -187,7 +193,7 @@ export class Cache {
     for (const v of m) {
       const path = new PanLPath(agent, Number(v));
       const room = await this.getRoomAddress(path);
-      pipeline.srem(room + Cache.PANLS_SUFFIX, JSON.stringify(path));
+      pipeline.srem(Cache.PANLS_PREFIX + room, JSON.stringify(path));
       pipeline.srem(Cache.PENDING_KEY, path);
       pipeline.del(Cache.ROOMNAME_KEY + await this.getRoomAddress(path));
       pipeline.del(Cache.addressKey(path));
@@ -216,7 +222,7 @@ export class Cache {
   }
 
   public async getRoomPanLs(room: string): Promise<PanLPath[]> {
-    const panls = await this.client.smembers(room + Cache.PANLS_SUFFIX);
+    const panls = await this.client.smembers(Cache.PANLS_PREFIX + room);
     const paths: PanLPath[] = [];
     for (const panl of panls) {
       const t = JSON.parse(panl);
@@ -225,12 +231,27 @@ export class Cache {
     return paths;
   }
 
-  public subscribeRoomStatusChange(sub: IRoomStatusChange) {
-    throw(new Error("getOnlineRooms not implemented"));
+  public async getOnlineRooms(): Promise<string[]> {
+    const panlRooms = await this.client.keys(Cache.PANLS_PREFIX + "*");
+
+    const rooms = [];
+    for (const room of panlRooms) {
+        rooms.push(room.slice(Cache.PANLS_PREFIX));
+    }
+    return rooms;
+  }
+
+  public async subscribeRoomStatusChange(sub: IRoomStatusChange):
+  Promise<void> {
+    this.roomSubsribers.push(sub);
+    const rooms = await this.getOnlineRooms();
+    for (const room of rooms) {
+      sub.onRoomOnline(room);
+    }
   }
 
   public unsubscribeRoomStatusChange(sub: IRoomStatusChange) {
-    throw(new Error("getOnlineRooms not implemented"));
+    this.roomSubsribers.splice(this.roomSubsribers.indexOf(sub), 1);
   }
 
   public async setTimeline(room: string, id: number,
@@ -385,15 +406,32 @@ export class Cache {
     }
   }
 
-  private setOnKeyExpired() {
-    const starts = (Cache.SHADOW_PREFIX).length;
-    this.observer.on("pmessage",  (pattern, channel, key) => {
-      const roomDate = key.slice(starts);
-      if (!roomDate) {
-        return;
+  private keyspaceNotificationProcess() {
+    const startsShadow = Cache.KEYSPACE0_PREFIX + Cache.SHADOW_PREFIX;
+    const startsPanls = Cache.KEYSPACE0_PREFIX + Cache.PANLS_PREFIX;
+
+    this.observer.on("pmessage",  (pattern, key, action) => {
+      if (action === "expired") {
+        if (key.startsWith(startsShadow)) {
+          const roomDate = key.slice(startsShadow.length);
+          if (!roomDate) {
+            return;
+          }
+          log.debug("expired: " + roomDate);
+          this.removeTimelineEntriesAndRelatedInfo(roomDate);
+        }
+      } else if (action === "del") {
+        if (key.startsWith(startsPanls)) {
+          const room = key.slice(startsPanls.length);
+          if (!room) {
+            return;
+          }
+          log.debug(room + " offline");
+          for (const subscriber of this.roomSubsribers) {
+            subscriber.onRoomOffline(room.address);
+          }
+        }
       }
-      log.debug("expired: " + roomDate);
-      this.removeTimelineEntriesAndRelatedInfo(roomDate);
     });
   }
 
