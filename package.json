@@ -10,7 +10,7 @@
     "build": "tsc --skipLibCheck && npm run tslint",
     "tslint": "tslint -c tslint.json -p tsconfig.json",
     "test": "NODE_ENV=test nyc mocha test/**/*.ts",
-    "web": "[ ! -d web/src ] && git submodule update --init --recursive; cd web; [ ! -d node_modules ] && npm install; npx ng build && cd -",
+    "buildweb": "[ ! -d web/src ] && git submodule update --init --recursive; cd web; [ ! -d node_modules ] && npm install; npx ng build && cd -",
     "prepush": "npm run build"
   },
   "nyc": {
@@ -66,7 +66,7 @@
     "husky": "^0.14.3",
     "mocha": "^4.0.1",
     "nodemon": "^1.12.1",
-    "nyc": "^11.3.0",
+    "nyc": "^11.4.0",
     "rewire": "^2.5.2",
     "source-map-support": "^0.5.0",
     "ts-node": "^3.3.0",
