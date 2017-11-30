@@ -2,22 +2,22 @@ import {
   Appointment, AppointmentSchema, AutodiscoverService,
   CalendarView, ConflictResolutionMode, ConnectingIdType, DateTime,
   EventType, EwsLogging, ExchangeService, ExchangeVersion, Folder, FolderId,
-  ImpersonatedUserId, Item, ItemEvent, ItemId, NotificationEventArgs,
+  ImpersonatedUserId, Item, ItemEvent, ItemId, Mailbox, NotificationEventArgs,
   PropertySet, SendInvitationsMode, SendInvitationsOrCancellationsMode,
   StreamingSubscriptionConnection, SubscriptionErrorEventArgs, Uri,
   WebCredentials, WellKnownFolderName,
 } from "ews-javascript-api";
 import moment = require("moment");
 import {ErrorCode} from "./builder";
-import {Cache} from "./cache";
+import {Cache, IRoomStatusChange} from "./cache";
 import {
-  ICalendar, ICalendarNotification, IMeetingInfo,
-  ITimelineEntry, ITimelineRequest,
+ICalendar, ICalendarNotification, IMeetingInfo,
+ITimelineEntry, ITimelineRequest,
 } from "./calendar";
 import {log} from "./log";
 import {CalendarType, ICalendarConfig, IHubConfig} from "./persist";
 
-export class EWSCalendar implements ICalendar {
+export class EWSCalendar implements ICalendar, IRoomStatusChange {
   private static minuteBased(x: number): number {
      return moment(x).second(0).millisecond(0).valueOf();
   }
@@ -45,7 +45,7 @@ export class EWSCalendar implements ICalendar {
 
   private stopped = false;
   private service: ExchangeService;
-  private sub: StreamingSubscriptionConnection;
+  private subMap = new Map<string, StreamingSubscriptionConnection>();
 
   constructor(private notify: ICalendarNotification,
               private cache: Cache, config: ICalendarConfig,
@@ -56,7 +56,6 @@ export class EWSCalendar implements ICalendar {
     this.service.Credentials = new WebCredentials(
       config.username, config.password);
     this.service.Url = new Uri(config.address);
-    this.streamNotification();
   }
 
   public async getTimeline(room: string, id: number):
@@ -225,19 +224,34 @@ export class EWSCalendar implements ICalendar {
 
   public async disconnect(): Promise<void> {
     this.stopped = true;
-    if (this.sub) {
-      this.sub.Close();
+    for (const sub of this.subMap.values()) {
+      if (sub) {
+        sub.Close();
+      }
+    }
+    // clear map
+    this.subMap.clear();
+  }
+
+  public async onRoomOnline(room: string): Promise<void> {
+    return this.streamNotification(room);
+  }
+
+  public async onRoomOffline(room: string): Promise<void> {
+    const sub = this.subMap.get(room);
+    if (sub) {
+      this.subMap.delete(room);
+      sub.Close();
     }
   }
 
-  private async handleNotification(uid: string, type: EventType):
+  private async handleNotification(room: string, uid: string, type: EventType):
   Promise<void> {
     let appt;
     try {
       appt = await Appointment.Bind(this.service, new ItemId(uid));
     } catch (err) {
       if (err.ErrorCode === 249) {
-        const room = await this.cache.getMeetingRoomFromUid(uid);
         const start = await this.cache.getMeetingStartFromUid(room, uid);
         this.notify.onDeleteNotification(room, start);
         log.debug("[notify] meeting deleted");
@@ -255,7 +269,6 @@ export class EWSCalendar implements ICalendar {
     };
     if (type === EventType.Created) {
       log.error("TODO: get meeting room address");
-      const room = "";
       this.cache.getRoomName(room);
       Promise.all([
         this.cache.setMeetingInfo(room, entry.start, info),
@@ -264,7 +277,6 @@ export class EWSCalendar implements ICalendar {
       this.notify.onAddNotification(room, entry);
       log.silly("[notify] create new meeting");
     } else if (type === EventType.Modified) {
-      const room = await this.cache.getMeetingRoomFromUid(uid);
       const start = await this.cache.getMeetingStartFromUid(room, uid);
       if (start === entry.start) {
         const end = await this.cache.getTimelineEntryEndTime(room, start);
@@ -287,44 +299,50 @@ export class EWSCalendar implements ICalendar {
     }
   }
 
-  private async streamNotification(): Promise<void> {
+  private async streamNotification(room: string): Promise<void> {
     const folderId: FolderId[] = [new FolderId(
-      WellKnownFolderName.Calendar)];
+      WellKnownFolderName.Calendar, new Mailbox(room))];
     const stream = await this.service.SubscribeToStreamingNotifications(
       folderId,
       EventType.Created,
       EventType.Modified);
 
     // Subscribe to streaming notifications in the Inbox.
-    this.sub = new StreamingSubscriptionConnection(this.service, 1);
+    const sub = new StreamingSubscriptionConnection(this.service, 1);
 
-    this.sub.AddSubscription(stream);
+    sub.AddSubscription(stream);
     // Delegate event handlers.
-    this.sub.OnNotificationEvent.push((conn, args) => {
-      this.onEvent(conn, args, this);
+    sub.OnNotificationEvent.push((conn, args) => {
+      this.onEvent(conn, args, room, this);
     });
     // Error handler
-    this.sub.OnSubscriptionError.push((conn, args) => {
+    sub.OnSubscriptionError.push((conn, args) => {
       log.error("EWS stream notification:::", args.Exception.Message);
     });
     // Auto reconnect
-    this.sub.OnDisconnect.push((conn) => {
+    sub.OnDisconnect.push((conn) => {
       if (!this.stopped) {
         conn.Open();
+        this.subMap.set(room, conn);
+      } else {
+        this.subMap.delete(room);
       }
     });
     // Open connected
     if (!this.stopped) {
-      this.sub.Open();
+      sub.Open();
+      this.subMap.set(room, sub);
       log.debug("Start EWS StreamSubscription Event...");
       if (this.stopped) {
-        this.sub.Close();
+        this.subMap.delete(room);
+        sub.Close();
       }
     }
   }
 
   private onEvent(connection: StreamingSubscriptionConnection,
-                  args: NotificationEventArgs, ews: EWSCalendar): void {
+                  args: NotificationEventArgs,
+                  room: string, ews: EWSCalendar): void {
     const subscription = args.Subscription;
 
     const tmpSet = new Set();
@@ -339,7 +357,8 @@ export class EWSCalendar implements ICalendar {
         notification.EventType, event.ItemId.UniqueId);
       tmpSet.add(event.ItemId.UniqueId);
       try {
-        ews.handleNotification(event.ItemId.UniqueId, notification.EventType);
+        ews.handleNotification(room, event.ItemId.UniqueId,
+          notification.EventType);
       } catch (error) {
         continue;
       }
