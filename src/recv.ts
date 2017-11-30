@@ -1,4 +1,3 @@
-import {EventEmitter} from "events";
 import moment = require("moment");
 import ref = require("ref");
 import ArrayType = require("ref-array");
@@ -93,11 +92,11 @@ export class MessageParser {
     }).valueOf();
   }
 
-  private stopped = false;
-  private evt = new EventEmitter();
+  private stopping = false;
   private path: PanLPath;
   private getBody = false;
   private bufs: Buffer[] = [];
+  private resolve: () => void;
 
   constructor(private agentEvt: IAgentEvent, private panlEvt: IPanLEvent,
               public id: number) {
@@ -106,12 +105,12 @@ export class MessageParser {
 
   public onData(buffer: Buffer): void {
     this.bufs.push(buffer);
-    this.evt.emit("rdy");
+    this.kickWaitingTask();
   }
 
   public stop() {
-    this.stopped = true;
-    this.evt.emit("stop");
+    this.stopping = true;
+    this.kickWaitingTask();
   }
 
   public startParserEngine(): Promise<void> {
@@ -223,21 +222,26 @@ export class MessageParser {
   }
 
   private async getNextBuffer(): Promise<Buffer> {
-    await new Promise<void>((resolve, reject) => {
-      this.evt.on("rdy", resolve);
-      this.evt.on("stop", () => reject("requested to stop"));
-      if (this.stopped) {
-        reject("requested to stop");
-      }
-      if (this.bufs.length !== 0) {
-        resolve();
-      }
-    });
-    const buf = this.bufs.shift();
-    if (buf === undefined) {
-      return this.getNextBuffer();
+    if (!this.bufs.length) {
+      await new Promise<void>((resolve, reject) => {
+        this.resolve = resolve;
+      });
     }
-    return buf;
+    if (this.stopping) {
+      throw(new Error("requested to stop"));
+    }
+    const buf = this.bufs.shift();
+    if (buf) {
+      return buf;
+    }
+    throw(new Error("!!!FIX ME!!! MessageParser in wrong state"));
+  }
+
+  private kickWaitingTask() {
+    if (this.resolve) {
+      this.resolve();
+      delete this.resolve;
+    }
   }
 
   private async waitBuf(buffer: Buffer, min: number):
