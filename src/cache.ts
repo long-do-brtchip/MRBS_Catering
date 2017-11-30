@@ -9,6 +9,11 @@ import {Persist} from "./persist";
 
 declare type PendingHandler = (path: PanLPath) => void;
 
+export interface IRoomStatusChange {
+  onRoomOnline(room: string): Promise<void>;
+  onRoomOffline(room: string): Promise<void>;
+}
+
 export class Cache {
   public static async getInstance(): Promise<Cache> {
     if (Cache.instance) {
@@ -218,6 +223,14 @@ export class Cache {
       paths.push(new PanLPath(t.agentID, t.mstpAddress));
     }
     return paths;
+  }
+
+  public subscribeRoomStatusChange(sub: IRoomStatusChange) {
+    throw(new Error("getOnlineRooms not implemented"));
+  }
+
+  public unsubscribeRoomStatusChange(sub: IRoomStatusChange) {
+    throw(new Error("getOnlineRooms not implemented"));
   }
 
   public async setTimeline(room: string, id: number,
