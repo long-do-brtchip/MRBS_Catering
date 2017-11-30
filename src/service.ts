@@ -322,9 +322,9 @@ export class PanLService implements IAgentEvent, IPanLEvent, ICalendarEvent {
     };
 
     try {
+      const room = await PanLService.cache.getRoomAddress(path);
       const [name, entriesBefore, entriesAfter] = await Promise.all([
-        PanLService.cache.getRoomName(
-          await PanLService.cache.getRoomAddress(path)),
+        PanLService.cache.getRoomName(room),
         this.cal.getTimeline(path, reqBefore),
         this.cal.getTimeline(path, reqAfter),
       ]);
@@ -334,31 +334,11 @@ export class PanLService implements IAgentEvent, IPanLEvent, ICalendarEvent {
         ? entriesAfter : entriesBefore.concat(entriesAfter);
       log.debug(`Request ${path} set room name to ${name}, busy slot(s): ` +
         entries.length);
-      if (entries.length === 0) {
-        this.tx.send(path, [
-          ...MessageBuilder.buildRoomName(name),
-          ...MessageBuilder.buildTimeline(entries, epoch),
-        ]);
-      } else if (entries.length === 1) {
-        this.tx.send(path, [
-          ...MessageBuilder.buildRoomName(name),
-          ...MessageBuilder.buildTimeline(entries, epoch),
-          ...MessageBuilder.buildMeetingInfo(
-            await this.cal.getMeetingInfo(path, entries[0].start)),
-        ]);
-      } else {
-        // Send next meeting info too
-        const info = await Promise.all([
-          this.cal.getMeetingInfo(path, entries[0].start),
-          this.cal.getMeetingInfo(path, entries[1].start),
-        ]);
-        this.tx.send(path, [
-          ...MessageBuilder.buildRoomName(name),
-          ...MessageBuilder.buildTimeline(entries, epoch),
-          ...MessageBuilder.buildMeetingInfo(info[0]),
-          ...MessageBuilder.buildMeetingInfo(info[1]),
-        ]);
-      }
+
+      this.tx.send(path, [
+        ...MessageBuilder.buildRoomName(name),
+        ...await this.getUpToTwoNewMeetingInfos(room, epoch, entries),
+      ]);
     } catch (err) {
       log.warn(`Init panel failed for ${path}: ${err}`);
     }
@@ -387,6 +367,7 @@ export class PanLService implements IAgentEvent, IPanLEvent, ICalendarEvent {
 
   private onNewDayTask(): void {
     this.tx.broadcastToAllImmediately([MessageBuilder.buildTime()]);
+    this.updateMeetingInfoForAllPanls();
     this.setupNewDayTask();
   }
 
@@ -394,6 +375,49 @@ export class PanLService implements IAgentEvent, IPanLEvent, ICalendarEvent {
     const now = moment();
     this.newDayJob = setTimeout(
       this.onNewDayTask.bind(this), moment().endOf("day").diff(now));
+  }
+
+  private async updateMeetingInfoForAllPanls(): Promise<void> {
+    const dayStart = moment().startOf("day").valueOf();
+    const rooms = await PanLService.cache.getOnlineRooms();
+    for (const room of rooms) {
+      const paths = await PanLService.cache.getRoomPanLs(room);
+      if (paths.length === 0) {
+        continue;
+      }
+      const entries = await this.cal.getTimeline(paths[0],
+        {id: dayStart, lookForward: true, maxCount: 5});
+      const msgs = await this.getUpToTwoNewMeetingInfos(
+        room, dayStart, entries);
+      for (const path of paths) {
+        this.tx.send(path, msgs);
+      }
+    }
+  }
+
+  private async getUpToTwoNewMeetingInfos(room: string, id: number,
+                                          entries: ITimelineEntry[]):
+  Promise<Buffer[]> {
+    let msgs;
+    if (entries.length === 0) {
+      msgs = [...MessageBuilder.buildTimeline(entries, id)];
+    } else if (entries.length === 1) {
+      msgs = [...MessageBuilder.buildTimeline(entries, id),
+        ...MessageBuilder.buildMeetingInfo(
+          await PanLService.cache.getMeetingInfo(room, entries[0].start)),
+      ];
+    } else {
+      const info = await Promise.all([
+        PanLService.cache.getMeetingInfo(room, entries[0].start),
+        PanLService.cache.getMeetingInfo(room, entries[1].start),
+      ]);
+      msgs = [
+        ...MessageBuilder.buildTimeline(entries, id),
+        ...MessageBuilder.buildMeetingInfo(info[0]),
+        ...MessageBuilder.buildMeetingInfo(info[1]),
+      ];
+    }
+    return msgs;
   }
 
   private addRef(): void {
