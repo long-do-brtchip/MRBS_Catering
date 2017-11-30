@@ -30,6 +30,13 @@ export class Database {
     }
   }
 
+  public async dropSchemas(): Promise<void> {
+    await Promise.all([
+      getConnection("auth").dropDatabase(),
+      getConnection().dropDatabase(),
+    ]);
+  }
+
   private addRef(): void {
     this.refCnt++;
   }

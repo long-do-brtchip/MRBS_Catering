@@ -236,7 +236,7 @@ export class Cache {
 
     const rooms = [];
     for (const room of panlRooms) {
-        rooms.push(room.slice(Cache.PANLS_PREFIX));
+      rooms.push(room.slice(Cache.PANLS_PREFIX.length));
     }
     return rooms;
   }
@@ -428,7 +428,7 @@ export class Cache {
           }
           log.debug(room + " offline");
           for (const subscriber of this.roomSubsribers) {
-            subscriber.onRoomOffline(room.address);
+            subscriber.onRoomOffline(room);
           }
         }
       }

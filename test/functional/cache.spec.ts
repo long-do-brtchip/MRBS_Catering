@@ -1,7 +1,7 @@
 import {assert, expect, use} from "chai";
 import chaiAsPromised = require("chai-as-promised");
 import moment = require("moment");
-import {Cache} from "../../src/cache";
+import {Cache, IRoomStatusChange} from "../../src/cache";
 import {ITimelineEntry} from "../../src/calendar";
 import {Room} from "../../src/entity/hub/room";
 import {log} from "../../src/log";
@@ -9,6 +9,41 @@ import {PanLPath} from "../../src/path";
 
 async function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+class NotificationTester implements IRoomStatusChange {
+  private firstOnlineReceived = false;
+
+  constructor(private verifyOnline: boolean, private roomAddr: string,
+              private cache: Cache, private cb: (err?: Error) => void) {
+  }
+
+  public async onRoomOnline(roomAddr: string): Promise<void> {
+    if (!this.verifyOnline && !this.firstOnlineReceived) {
+      this.firstOnlineReceived = true;
+      return;
+    }
+    this.onChange(roomAddr, true);
+  }
+
+  public async onRoomOffline(roomAddr: string): Promise<void> {
+    this.onChange(roomAddr, false);
+  }
+
+  private async onChange(roomAddr: string, online: boolean) {
+    this.cache.unsubscribeRoomStatusChange(this);
+    if (this.roomAddr !== roomAddr) {
+      this.cb(new Error(`Wrong room address ${roomAddr} received, ` +
+        `expect ${this.roomAddr}`));
+      return;
+    }
+    if (this.verifyOnline === online) {
+      this.cb();
+    } else {
+      this.cb(new Error(`Wrong room status: ${online}, ` +
+        `expect ${this.verifyOnline}`));
+    }
+  }
 }
 
 describe("Cache module", () => {
@@ -20,6 +55,7 @@ describe("Cache module", () => {
     await cache.flush();
   });
   after(async () => {
+    await cache.flush();
     await cache.stop();
   });
 
@@ -79,6 +115,7 @@ describe("Cache module", () => {
 
   const room = "test1@ftdi.local";
   describe("Configured ID", () => {
+    const roomName = "Test Room 1";
     const room2 = "test2@ftdi.local";
     const path1 = new PanLPath(1, 1);
     const path2 = new PanLPath(1, 2);
@@ -86,15 +123,13 @@ describe("Cache module", () => {
       const path4 = new PanLPath(1, 4);
       await cache.addUnconfigured(path1,
         new Buffer([0x04, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08]));
-      await cache.addConfigured(path1,
-        new Room(room, "Test Room 1"));
-      await cache.addConfigured(path2,
-        new Room(room2, "Test Room 2"));
+      await cache.addConfigured(path1, new Room(room, roomName));
+      await cache.addConfigured(path2, new Room(room2, "Test Room 2"));
       await cache.addConfigured(path4,
         new Room("test4@ftdi.local", "Test Room 4"));
       expect(await cache.getRoomAddress(path1)).equal(room);
       expect(await cache.getRoomAddress(path2)).equal(room2);
-      expect(await cache.getRoomName(room)).equal("Test Room 1");
+      expect(await cache.getRoomName(room)).equal(roomName);
       expect(await cache.getRoomName(room2)).equal("Test Room 2");
     });
     it("linked room address shall be removed after agent disconnected",
@@ -112,7 +147,18 @@ describe("Cache module", () => {
       await cache.consumePending((path) => {
         list = list.filter((item) => item.uid !== path.uid);
       });
+      await cache.flush();
       expect(list.length).to.equal(0);
+    });
+    it("should be able to get room online notification", (done) => {
+      cache.subscribeRoomStatusChange(
+        new NotificationTester(true, room, cache, done));
+      cache.addConfigured(path1, new Room(room, roomName));
+    });
+    it("should be able to get room offline notification", (done) => {
+      cache.subscribeRoomStatusChange(
+        new NotificationTester(false, room, cache, done));
+      cache.removeAgent(path1.agent);
     });
   });
 
