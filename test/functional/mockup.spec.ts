@@ -30,7 +30,8 @@ class CalendarEventConsumer implements ICalendarEvent {
     return;
   }
 
-  public async onExtend(path: PanLPath, entry: ITimelineEntry): Promise<void> {
+  public async onEndTimeChanged(path: PanLPath, entry: ITimelineEntry):
+  Promise<void> {
     return;
   }
 }

@@ -44,7 +44,7 @@ enum Outgoing {
   SET_BACKLIGHT,
   SET_ROOM_NAME,
   SET_TIMELINE,
-  ON_EXTEND_MEETING,
+  ON_MEETING_END_TIME_CHANGED,
   ON_ADD_MEETING,
   ON_DEL_MEETING,
   ON_UPDATE_MEETING,
@@ -163,27 +163,14 @@ const StructTimelineEntry = StructType({
   endTime: ref.types.uint16,
 }, {packed: true});
 
-const StructAddMeeting = StructType({
+const StructDuration = StructType({
   cmd : ref.types.uint8,
   dayOffset: ref.types.int8,
   minutesOfDay: ref.types.uint16,
   duration: ref.types.uint16,
 }, {packed: true});
 
-const StructExtendMeeting = StructType({
-  cmd : ref.types.uint8,
-  dayOffset: ref.types.int8,
-  minutesOfDay: ref.types.uint16,
-  newDuration: ref.types.uint16,
-}, {packed: true});
-
-const StructDeleteMeeting = StructType({
-  cmd : ref.types.uint8,
-  dayOffset: ref.types.int8,
-  minutesOfDay: ref.types.uint16,
-}, {packed: true});
-
-const StructUpdateMeeting = StructType({
+const StructTimepoint = StructType({
   cmd : ref.types.uint8,
   dayOffset: ref.types.int8,
   minutesOfDay: ref.types.uint16,
@@ -325,41 +312,20 @@ export class MessageBuilder {
   }
 
   public static buildAddMeeting(entry: ITimelineEntry): Buffer {
-    const tp = MessageBuilder.epochToOffset(entry.start);
-    return new StructAddMeeting({
-      cmd: Outgoing.ON_ADD_MEETING,
-      dayOffset: tp.dayOffset,
-      minutesOfDay: tp.minutesOfDay,
-      duration: moment(entry.end).diff(moment(entry.start), "minutes"),
-    }).ref();
+    return MessageBuilder.buildDuration(Outgoing.ON_ADD_MEETING, entry);
   }
 
-  public static buildExtendMeeting(entry: ITimelineEntry): Buffer {
-    const tp = MessageBuilder.epochToOffset(entry.start);
-    return new StructExtendMeeting({
-      cmd: Outgoing.ON_EXTEND_MEETING,
-      dayOffset: tp.dayOffset,
-      minutesOfDay: tp.minutesOfDay,
-      duration: moment(entry.end).diff(moment(entry.start), "minutes"),
-    }).ref();
+  public static buildMeetingEndTimeChanged(entry: ITimelineEntry): Buffer {
+    return MessageBuilder.buildDuration(
+      Outgoing.ON_MEETING_END_TIME_CHANGED, entry);
   }
 
   public static buildDeleteMeeting(id: number): Buffer {
-    const tp = MessageBuilder.epochToOffset(id);
-    return new StructDeleteMeeting({
-      cmd: Outgoing.ON_DEL_MEETING,
-      dayOffset: tp.dayOffset,
-      minutesOfDay: tp.minutesOfDay,
-    }).ref();
+    return MessageBuilder.buildTimepoint(Outgoing.ON_DEL_MEETING, id);
   }
 
   public static buildUpdateMeeting(id: number): Buffer {
-    const tp = MessageBuilder.epochToOffset(id);
-    return new StructUpdateMeeting({
-      cmd: Outgoing.ON_UPDATE_MEETING,
-      dayOffset: tp.dayOffset,
-      minutesOfDay: tp.minutesOfDay,
-    }).ref();
+    return MessageBuilder.buildTimepoint(Outgoing.ON_UPDATE_MEETING, id);
   }
 
   public static buildErrorCode(id: ErrorCode): Buffer {
@@ -375,6 +341,25 @@ export class MessageBuilder {
       featureDisabled: MessageBuilder.convertBitArray(panl.featureDisabled),
       authAllowPasscode: MessageBuilder.convertBitArray(panl.authAllowPasscode),
       authAllowRFID: MessageBuilder.convertBitArray(panl.authAllowRFID),
+    }).ref();
+  }
+
+  private static buildDuration(cmd: Outgoing, entry: ITimelineEntry): Buffer {
+    const tp = MessageBuilder.epochToOffset(entry.start);
+    return new StructDuration({
+      cmd,
+      dayOffset: tp.dayOffset,
+      minutesOfDay: tp.minutesOfDay,
+      duration: moment(entry.end).diff(moment(entry.start), "minutes"),
+    }).ref();
+  }
+
+  private static buildTimepoint(cmd: Outgoing, id: number): Buffer {
+    const tp = MessageBuilder.epochToOffset(id);
+    return new StructTimepoint({
+      cmd,
+      dayOffset: tp.dayOffset,
+      minutesOfDay: tp.minutesOfDay,
     }).ref();
   }
 

@@ -41,7 +41,7 @@ export interface ICalendarEvent {
   onAdd(path: PanLPath, entry: ITimelineEntry): Promise<void>;
   onDelete(path: PanLPath, id: number): Promise<void>;
   onUpdate(path: PanLPath, id: number): Promise<void>;
-  onExtend(path: PanLPath, entry: ITimelineEntry): Promise<void>;
+  onEndTimeChanged(path: PanLPath, entry: ITimelineEntry): Promise<void>;
 }
 
 export class PanLService implements IAgentEvent, IPanLEvent, ICalendarEvent {
@@ -252,9 +252,10 @@ export class PanLService implements IAgentEvent, IPanLEvent, ICalendarEvent {
     }
   }
 
-  public async onExtend(path: PanLPath, entry: ITimelineEntry): Promise<void> {
+  public async onEndTimeChanged(path: PanLPath, entry: ITimelineEntry):
+  Promise<void> {
     try {
-      this.tx.send(path, [MessageBuilder.buildExtendMeeting(entry)]);
+      this.tx.send(path, [MessageBuilder.buildMeetingEndTimeChanged(entry)]);
     } catch (err) {
       log.warn(`Extend meeting notification failed for ${path}: ${err}`);
     }

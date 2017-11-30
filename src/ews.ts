@@ -272,7 +272,7 @@ export class EWSCalendar implements ICalendar {
         if (end === entry.end) {
           await this.notify.onMeetingUpdateNotification(room, start);
         } else {
-          await this.notify.onEndTimeChangeNofication(room, entry);
+          await this.notify.onEndTimeChangeNotification(room, entry);
         }
       } else {
         await this.notify.onDeleteNotification(room, start);

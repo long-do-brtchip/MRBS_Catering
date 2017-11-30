@@ -42,7 +42,7 @@ export interface ICalendar {
 }
 
 export interface ICalendarNotification {
-  onEndTimeChangeNofication(room: string, entry: ITimelineEntry):
+  onEndTimeChangeNotification(room: string, entry: ITimelineEntry):
   Promise<void>;
   onAddNotification(room: string, entry: ITimelineEntry):
   Promise<void>;
@@ -188,13 +188,13 @@ export class CalendarManager implements ICalendarNotification {
     }
   }
 
-  public async onEndTimeChangeNofication(
+  public async onEndTimeChangeNotification(
     room: string, entry: ITimelineEntry): Promise<void> {
     // Start time no change
     await this.cache.setTimelineEntry(room, entry);
     const paths = await this.cache.getRoomPanLs(room);
     for (const path of paths) {
-      this.event.onExtend(path, entry);
+      this.event.onEndTimeChanged(path, entry);
     }
   }
 

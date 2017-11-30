@@ -45,7 +45,7 @@ export class MockupCalendar implements ICalendar {
     info.subject = email ? `Extended by ${email}: ${info.subject}` :
                    `Extended: ${info.subject}`;
     await this.cache.setMeetingInfo(room, entry.start, info);
-    await this.notify.onEndTimeChangeNofication(room, entry);
+    await this.notify.onEndTimeChangeNotification(room, entry);
     return ErrorCode.ERROR_SUCCESS;
   }
 
@@ -59,7 +59,7 @@ export class MockupCalendar implements ICalendar {
     info.subject = email ? `Ended by ${email}: ${info.subject}` :
                    `Ended: ${info.subject}`;
     await this.cache.setMeetingInfo(room, id, info);
-    await this.notify.onEndTimeChangeNofication(room, entry);
+    await this.notify.onEndTimeChangeNotification(room, entry);
     return ErrorCode.ERROR_SUCCESS;
   }
 
