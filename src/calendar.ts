@@ -1,3 +1,4 @@
+import moment = require("moment");
 import {ErrorCode} from "./builder";
 import {Cache} from "./cache";
 import {Database} from "./database";
@@ -181,6 +182,10 @@ export class CalendarManager implements ICalendarNotification {
 
   public async onAddNotification(room: string, entry: ITimelineEntry):
   Promise<void> {
+    if (entry.end >= entry.start) {
+      log.debug("New meeting ends before started");
+      return;
+    }
     await this.cache.setTimelineEntry(room, entry);
     const paths = await this.cache.getRoomPanLs(room);
     for (const path of paths) {
@@ -188,9 +193,15 @@ export class CalendarManager implements ICalendarNotification {
     }
   }
 
-  public async onEndTimeChangeNotification(
-    room: string, entry: ITimelineEntry): Promise<void> {
+  public async onEndTimeChangeNotification(room: string, entry: ITimelineEntry):
+  Promise<void> {
     // Start time no change
+    if (entry.end < entry.start) {
+      log.debug("meeting ends before started");
+      entry.end = entry.start;
+    }
+    log.debug(`${room}'s meeting start from ${moment(entry.start).calendar()} `
+      + `end time changed to ${moment(entry.end).calendar()}`);
     await this.cache.setTimelineEntry(room, entry);
     const paths = await this.cache.getRoomPanLs(room);
     for (const path of paths) {
