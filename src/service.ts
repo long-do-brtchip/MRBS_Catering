@@ -147,6 +147,7 @@ export class PanLService implements IAgentEvent, IPanLEvent, ICalendarEvent {
   }
 
   public async onPasscode(path: PanLPath, code: number): Promise<void> {
+    log.debug(`Path ${path} requests passcode authentication`);
     await this.processAuthResult(path, await Auth.authByPasscode(code));
   }
 
