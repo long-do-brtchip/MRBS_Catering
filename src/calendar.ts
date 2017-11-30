@@ -182,10 +182,12 @@ export class CalendarManager implements ICalendarNotification {
 
   public async onAddNotification(room: string, entry: ITimelineEntry):
   Promise<void> {
-    if (entry.end >= entry.start) {
+    if (entry.end < entry.start) {
       log.debug("New meeting ends before started");
       return;
     }
+    log.debug(`${room} new meeting starts from ` +
+      moment(entry.start).calendar() + `ends ${moment(entry.end).calendar()}`);
     await this.cache.setTimelineEntry(room, entry);
     const paths = await this.cache.getRoomPanLs(room);
     for (const path of paths) {
@@ -200,8 +202,8 @@ export class CalendarManager implements ICalendarNotification {
       log.debug("meeting ends before started");
       entry.end = entry.start;
     }
-    log.debug(`${room}'s meeting start from ${moment(entry.start).calendar()} `
-      + `end time changed to ${moment(entry.end).calendar()}`);
+    log.debug(`${room}'s meeting starts from ${moment(entry.start).calendar()}`
+      + ` end time changed to ${moment(entry.end).calendar()}`);
     await this.cache.setTimelineEntry(room, entry);
     const paths = await this.cache.getRoomPanLs(room);
     for (const path of paths) {
@@ -212,6 +214,8 @@ export class CalendarManager implements ICalendarNotification {
   public async onDeleteNotification(room: string, id: number):
   Promise<void> {
     // Call onDeleteNotification and onAddNotification if start time changed
+    log.debug(`${room}'s meeting starts from ${moment(id).calendar()} `
+      + " is deleted.");
     await this.cache.removeTimelineEntry(room, id);
     const paths = await this.cache.getRoomPanLs(room);
     for (const path of paths) {
@@ -222,6 +226,8 @@ export class CalendarManager implements ICalendarNotification {
   public async onMeetingUpdateNotification(room: string, id: number):
   Promise<void> {
     // Start and end time no change
+    log.debug(`${room}'s meeting starts from ${moment(id).calendar()} `
+      + " is updated.");
     const paths = await this.cache.getRoomPanLs(room);
     for (const path of paths) {
       this.event.onUpdate(path, id);
