@@ -53,25 +53,24 @@ describe("Mockup calendar module", () => {
       password: "",
       readonly: false});
     cache = await Cache.getInstance();
-    await cache.flush();
     cal = new CalendarManager(cache, consumer, await Persist.getHubConfig(),
                               await Persist.getPanlConfig());
   });
   after(async () => {
-    await cache.flush();
     await cal.disconnect();
     await cache.stop();
     await db.stop();
   });
 
   const at = (s: string) => moment(s).valueOf();
+  const roomName = "sentosa@ftdichip.com";
   describe("getTimeline", () => {
     const id = at("2017-12-01 14:30");
     it("should able to connect", async () => {
       await cal.connect();
       assert(cal);
       assert(cal.connected);
-      const room = await Persist.findRoom("sentosa@ftdichip.com");
+      const room = await Persist.findRoom(roomName);
       if (!room) {
         assert(0);
       } else {
@@ -104,12 +103,21 @@ describe("Mockup calendar module", () => {
   });
   describe("meeting", () => {
     it("should be able to create meeting", async () => {
-      const entry = {
-        start: at("2017-11-01 14:30"),
-        end: moment().add(1, "hours").valueOf(),
-      };
+      const id = at("2017-11-01 14:30");
+      const end = at("2017-11-01 16:30");
+      const req = {id, lookForward: true, maxCount: 255};
+
       await cache.setAuthSuccess(path, "panl@ftdichip.com");
-      await cal.createBooking(path, entry);
+      // Remove all timelines first
+      await cache.setTimeline(roomName, id, []);
+      let entries = await cal.getTimeline(path, req);
+      expect(entries.length).to.equal(0);
+      await cal.createBooking(path, {start: id, end});
+      entries = await cal.getTimeline(path, req);
+      expect(entries.length).to.equal(1);
+      await cal.createBooking(path, {start: id, end});
+      entries = await cal.getTimeline(path, req);
+      expect(entries.length).to.equal(1);
     });
   });
 });
