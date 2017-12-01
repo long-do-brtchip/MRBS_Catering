@@ -11,7 +11,7 @@ export class Auth {
       employee = new Employee(email);
     }
     employee.name = name;
-    employee.save();
+    await employee.save();
     return employee;
   }
 
@@ -28,7 +28,7 @@ export class Auth {
     pass = new Passcode();
     pass.passcode = passcode;
     pass.employee = employee;
-    pass.save();
+    await pass.save();
   }
 
   public static async addRFID(employee: Employee, epc: Buffer) {
@@ -38,7 +38,7 @@ export class Auth {
       rfid.epc = epc;
     }
     rfid.employee = employee;
-    rfid.save();
+    await rfid.save();
   }
 
   public static async authByPasscode(code: number): Promise<string> {

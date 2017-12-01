@@ -267,9 +267,14 @@ export class EWSCalendar implements ICalendar, IRoomStatusChange {
       start: EWSCalendar.minuteBased(appt.Start.TotalMilliSeconds),
       end: EWSCalendar.minuteBased(appt.End.TotalMilliSeconds),
     };
+
+    if (await !this.cache.isTimelineCachedForDay(room, entry.start)) {
+      // No PanL is interested with this new meeting
+      return;
+    }
+
     if (type === EventType.Created) {
       log.error("TODO: get meeting room address");
-      this.cache.getRoomName(room);
       Promise.all([
         this.cache.setMeetingInfo(room, entry.start, info),
         this.cache.setMeetingUid(room, entry.start, uid),
@@ -278,6 +283,10 @@ export class EWSCalendar implements ICalendar, IRoomStatusChange {
       log.silly("[notify] create new meeting");
     } else if (type === EventType.Modified) {
       const start = await this.cache.getMeetingStartFromUid(room, uid);
+      if (start === 0) {
+        // No PanL is interested with this modification
+        return;
+      }
       if (start === entry.start) {
         const end = await this.cache.getTimelineEntryEndTime(room, start);
         await this.cache.setMeetingInfo(room, start, info);

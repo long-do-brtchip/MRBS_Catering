@@ -39,6 +39,7 @@ export class Database {
       getConnection("auth").dropDatabase(),
       getConnection().dropDatabase(),
     ]);
+    await this.stop();
   }
 
   private addRef(): void {

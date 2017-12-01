@@ -204,8 +204,7 @@ export class MockupCalendar implements ICalendar {
   }
 
   public async disconnect(): Promise<void> {
-    const db = await Database.getInstance();
-    await db.dropSchemas();
+    return;
   }
 
   private async addFakeAuthDatas() {

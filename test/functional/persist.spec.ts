@@ -21,7 +21,6 @@ describe("Persist module", function foo() {
 
   after(async () => {
     await db.dropSchemas();
-    await db.stop();
   });
 
   describe("agent", () => {

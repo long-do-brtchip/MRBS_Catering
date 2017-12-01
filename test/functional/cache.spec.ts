@@ -169,6 +169,12 @@ describe("Cache module", () => {
     const tomorrow = (h: number, m: number) =>
       moment().startOf("day").add(1, "day").hour(h).minute(m).valueOf();
     const sortAsc = (a: ITimelineEntry, b: ITimelineEntry) => a.start - b.start;
+    it("Should return starts 0 when uid is not cached", async () => {
+      await cache.flush();
+      const starts = await cache.getMeetingStartFromUid(
+        "test@test.com", "12345");
+      expect(starts).to.equal(0);
+    });
     it("Should return undefined when day without cache", async () => {
       await cache.flush();
       const req = {

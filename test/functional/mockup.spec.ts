@@ -75,21 +75,21 @@ describe("Mockup calendar module", () => {
       const req = {id: startOfDay.valueOf(),
                    lookForward: true, maxCount: 255};
       const entires = await cal.getTimeline(path, req);
-      expect(entires.length).to.equal(2);
+      expect(entires.length).to.equal(0);
     });
     it("should only return one busy slot in the morning", async () => {
       assert(cal !== undefined);
       const req = {id: startOfDay.hour(16).valueOf(),
                    lookForward: false, maxCount: 255};
       const entires = await cal.getTimeline(path, req);
-      expect(entires.length).to.equal(1);
+      expect(entires.length).to.equal(0);
     });
     it("should only return one busy slot in the afternoon", async () => {
       assert(cal !== undefined);
       const req = {id: startOfDay.hour(16).valueOf(),
                    lookForward: true, maxCount: 255};
       const entires = await cal.getTimeline(path, req);
-      expect(entires.length).to.equal(1);
+      expect(entires.length).to.equal(0);
     });
   });
   describe("meeting", () => {
