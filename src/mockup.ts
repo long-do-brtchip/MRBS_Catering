@@ -58,6 +58,12 @@ const rooms: IFakeRoom[] = [
   room: "sentosa@ftdichip.com",
   name: "Sentosa",
   meetings: [{
+    timeline: {start: at("2017-12-01 08:30"), end: at("2017-12-01 10:00")},
+    subject: "MRBS weekly",
+    attendees: [
+      "passcode@ftdichip.com", "fred@ftdichip.com", "rfid@ftdichip.com",
+    ],
+  } , {
     timeline: {start: at("2017-12-01 14:30"), end: at("2017-12-01 15:00")},
     subject: "MRBS weekly",
     attendees: [
@@ -109,8 +115,13 @@ export class MockupCalendar implements ICalendar {
 
   constructor(private notify: ICalendarNotification,
               private cache: Cache, private configHub: IHubConfig) {
-    this.addFakeAuthDatas();
-    this.addFakeRooms();
+  }
+
+  public async init() {
+    await Promise.all([
+      this.addFakeAuthDatas(),
+      this.addFakeRooms(),
+    ]);
   }
 
   public async getTimeline(room: string, id: number): Promise<boolean> {
@@ -201,10 +212,6 @@ export class MockupCalendar implements ICalendar {
       }
     }
     return false;
-  }
-
-  public async disconnect(): Promise<void> {
-    return;
   }
 
   private async addFakeAuthDatas() {

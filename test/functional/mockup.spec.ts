@@ -53,54 +53,63 @@ describe("Mockup calendar module", () => {
       password: "",
       readonly: false});
     cache = await Cache.getInstance();
+    await cache.flush();
     cal = new CalendarManager(cache, consumer, await Persist.getHubConfig(),
                               await Persist.getPanlConfig());
-    cache.addConfigured(path, new Room("test@test.com", "Test"));
   });
   after(async () => {
+    await cache.flush();
     await cal.disconnect();
     await cache.stop();
     await db.stop();
   });
 
+  const at = (s: string) => moment(s).valueOf();
   describe("getTimeline", () => {
-    const startOfDay = moment().startOf("day");
+    const id = at("2017-12-01 14:30");
     it("should able to connect", async () => {
       await cal.connect();
       assert(cal);
       assert(cal.connected);
+      const room = await Persist.findRoom("sentosa@ftdichip.com");
+      if (!room) {
+        assert(0);
+      } else {
+        await cache.addConfigured(path, room);
+      }
+      expect(room).to.not.equal(undefined);
     });
     it("should return two busy slots by default", async () => {
       assert(cal !== undefined);
-      const req = {id: startOfDay.valueOf(),
-                   lookForward: true, maxCount: 255};
+      const req = {
+        id : moment(id).startOf("day").valueOf(),
+        lookForward: true,
+        maxCount: 255,
+      };
       const entires = await cal.getTimeline(path, req);
-      expect(entires.length).to.equal(0);
+      expect(entires.length).to.equal(2);
     });
     it("should only return one busy slot in the morning", async () => {
       assert(cal !== undefined);
-      const req = {id: startOfDay.hour(16).valueOf(),
-                   lookForward: false, maxCount: 255};
+      const req = {id, lookForward: false, maxCount: 255};
       const entires = await cal.getTimeline(path, req);
-      expect(entires.length).to.equal(0);
+      expect(entires.length).to.equal(1);
     });
     it("should only return one busy slot in the afternoon", async () => {
       assert(cal !== undefined);
-      const req = {id: startOfDay.hour(16).valueOf(),
-                   lookForward: true, maxCount: 255};
+      const req = {id, lookForward: true, maxCount: 255};
       const entires = await cal.getTimeline(path, req);
-      expect(entires.length).to.equal(0);
+      expect(entires.length).to.equal(1);
     });
   });
   describe("meeting", () => {
     it("should be able to create meeting", async () => {
       const entry = {
-        start: moment().valueOf(),
+        start: at("2017-11-01 14:30"),
         end: moment().add(1, "hours").valueOf(),
       };
-      await cache.setAuthSuccess(path, "rfid@test.com");
+      await cache.setAuthSuccess(path, "panl@ftdichip.com");
       await cal.createBooking(path, entry);
     });
   });
-
 });

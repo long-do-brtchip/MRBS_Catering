@@ -260,6 +260,7 @@ export class Cache {
     const key = Cache.TIMELINE_PREFIX + Cache.roomDateKey(room, id);
 
     const pipeline: redis.Pipeline = this.client.pipeline();
+    pipeline.del(key);
     for (const entry of entries) {
       pipeline.zadd(key, entry.start, entry.end);
     }

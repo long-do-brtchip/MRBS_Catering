@@ -39,7 +39,8 @@ export interface ICalendar {
   cancelUnclaimedMeeting(room: string, id: number): Promise<ErrorCode>;
   isAttendeeInMeeting(room: string, id: number, email: string):
   Promise<boolean>;
-  disconnect(): Promise<void>;
+  disconnect?(): Promise<void>;
+  init?(): Promise<void>;
 }
 
 export interface ICalendarNotification {
@@ -133,7 +134,12 @@ export class CalendarManager implements ICalendarNotification {
         return ErrorCode.ERROR_AUTH_ERROR;
       }
     }
-    return this.calendar.endMeeting(room, id, email);
+    if (id < moment().add(1, "minutes").valueOf()) {
+      // Meeting hasn't started, should be cancelled
+      return this.calendar.cancelMeeting(room, id, email);
+    } else {
+      return this.calendar.endMeeting(room, id, email);
+    }
   }
 
   public async cancelMeeting(path: PanLPath, id: number):
@@ -261,12 +267,17 @@ export class CalendarManager implements ICalendarNotification {
       await this.event.onCalMgrError(err);
       return;
     }
+    if (this.calendar.init) {
+      await this.calendar.init();
+    }
     this.isConnected = true;
     await this.event.onCalMgrReady();
   }
 
   public async disconnect(): Promise<void> {
-    await this.calendar.disconnect();
+    if (this.calendar.disconnect) {
+      await this.calendar.disconnect();
+    }
     this.isConnected = false;
     delete this.calendar;
   }
