@@ -17,6 +17,9 @@ export class Auth {
 
   public static async getEmployeeName(email: string): Promise<string> {
     const employee = await Employee.findOne({where: {email}}) as Employee;
+    if (!employee) {
+      return "";
+    }
     return employee.name;
   }
 
