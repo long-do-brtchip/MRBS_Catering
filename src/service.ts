@@ -86,7 +86,7 @@ export class PanLService implements IAgentEvent, IPanLEvent, ICalendarEvent {
 
   public async onCalMgrReady(): Promise<void> {
     log.info("Calendar manager is online");
-    PanLService.cache.consumePending((path) => {
+    await PanLService.cache.consumePending((path) => {
       this.initPanel(path);
     });
   }

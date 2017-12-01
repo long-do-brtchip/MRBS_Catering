@@ -271,7 +271,11 @@ export class CalendarManager implements ICalendarNotification {
       await this.calendar.init();
     }
     this.isConnected = true;
-    await this.event.onCalMgrReady();
+    try {
+      await this.event.onCalMgrReady();
+    } catch (Error) {
+      log.debug("PanLService stopped already");
+    }
   }
 
   public async disconnect(): Promise<void> {
