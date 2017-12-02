@@ -5,13 +5,14 @@ import {PanLService} from "../../src/service";
 
 describe("Agent simulator", () => {
   const parser = rewire("../../src/recv");
-  let service: PanLService;
+  let stopCallback: () => Promise<void>;
 
   before(async () => {
-    service = await PanLService.getInstance();
+    let service: PanLService;
+    [service, stopCallback] = await PanLService.getInstance();
   });
   after(async () => {
-    await service.stop();
+    await stopCallback();
   });
   it("should be able to connect PanLHub service", (done) => {
     const client = new net.Socket();

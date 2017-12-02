@@ -82,15 +82,11 @@ api.route("/panl/:id/:address").get(async (req, res) => {
   }
 
   const [path, uuid] = panl;
-  const db = await Database.getInstance();
   const room = await Persist.findRoom(req.params.address);
   if (room === undefined) {
-    await db.stop();
     return res.status(410).send(`Invalid room address ${req.params.address}`);
   }
   await Persist.linkPanL(uuid, room);
-  const service = await PanLService.getInstance();
-  await service.onReportUUID(path, uuid);
-  await Promise.all([service.stop(), db.stop()]);
+  await req.app.locals.service.onReportUUID(path, uuid);
   return res.sendStatus(204);
 });

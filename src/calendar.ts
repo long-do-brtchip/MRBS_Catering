@@ -3,11 +3,11 @@ import {ErrorCode} from "./builder";
 import {Cache} from "./cache";
 import {Database} from "./database";
 import {EWSCalendar} from "./ews";
+import {ICalendarEvent} from "./interface";
 import {log} from "./log";
 import {MockupCalendar} from "./mockup";
 import {PanLPath} from "./path";
 import {CalendarType, IHubConfig, IPanlConfig, Persist} from "./persist";
-import {ICalendarEvent} from "./service";
 
 export interface ITimelineEntry {
   // epoch time
@@ -53,15 +53,12 @@ export interface ICalendarNotification {
 }
 
 export class CalendarManager implements ICalendarNotification {
+  private event?: ICalendarEvent;
   private calendar: ICalendar;
   private isConnected: boolean;
 
-  constructor(private cache: Cache, private event: ICalendarEvent,
-              private hubConfig: IHubConfig, private panlConfig: IPanlConfig) {
-    if (event === undefined || cache === undefined ||
-        hubConfig === undefined || panlConfig === undefined) {
-      throw(new Error("Invalid parameter"));
-    }
+  constructor(private cache: Cache, private hubConfig: IHubConfig,
+              private panlConfig: IPanlConfig) {
   }
 
   public get connected(): boolean {
@@ -186,8 +183,10 @@ export class CalendarManager implements ICalendarNotification {
       await this.cache.getRoomAddress(path), id);
   }
 
-  public async onAddNotification(room: string, entry: ITimelineEntry):
-  Promise<void> {
+  public async onAddNotification(room: string, entry: ITimelineEntry) {
+    if (!this.event) {
+      return;
+    }
     if (entry.end <= entry.start) {
       log.debug("New meeting ends before started");
       return;
@@ -201,9 +200,12 @@ export class CalendarManager implements ICalendarNotification {
     }
   }
 
-  public async onEndTimeChangeNotification(room: string, entry: ITimelineEntry):
-  Promise<void> {
+  public async onEndTimeChangeNotification(
+    room: string, entry: ITimelineEntry) {
     // Start time no change
+    if (!this.event) {
+      return;
+    }
     if (entry.end < entry.start) {
       log.debug("meeting ends before started");
       entry.end = entry.start;
@@ -217,9 +219,11 @@ export class CalendarManager implements ICalendarNotification {
     }
   }
 
-  public async onDeleteNotification(room: string, id: number):
-  Promise<void> {
+  public async onDeleteNotification(room: string, id: number) {
     // Call onDeleteNotification and onAddNotification if start time changed
+    if (!this.event) {
+      return;
+    }
     log.debug(`${room}'s meeting starts from ${moment(id).calendar()} `
       + " is deleted.");
     await this.cache.removeTimelineEntry(room, id);
@@ -229,8 +233,10 @@ export class CalendarManager implements ICalendarNotification {
     }
   }
 
-  public async onMeetingUpdateNotification(room: string, id: number):
-  Promise<void> {
+  public async onMeetingUpdateNotification(room: string, id: number) {
+    if (!this.event) {
+      return;
+    }
     // Start and end time no change
     log.debug(`${room}'s meeting starts from ${moment(id).calendar()} `
       + " is updated.");
@@ -240,8 +246,9 @@ export class CalendarManager implements ICalendarNotification {
     }
   }
 
-  public async connect(): Promise<void> {
+  public async connect(event: ICalendarEvent) {
     log.info("Start Calendar Manager...");
+    this.event = event;
 
     try {
       const db = await Database.getInstance();
@@ -279,6 +286,7 @@ export class CalendarManager implements ICalendarNotification {
   }
 
   public async disconnect(): Promise<void> {
+    delete this.event;
     if (this.calendar.disconnect) {
       await this.calendar.disconnect();
     }

@@ -4,102 +4,80 @@ import {ErrorCode, MessageBuilder} from "./builder";
 import {Cache} from "./cache";
 import {CalendarManager, ITimelineEntry, ITimelineRequest} from "./calendar";
 import {Database} from "./database";
+import {IAgentEvent, ICalendarEvent,
+  IMessageTransport, IPanLEvent} from "./interface";
 import {log} from "./log";
 import {PanLPath} from "./path";
 import {IHubConfig, IPanlConfig, Persist} from "./persist";
+import {TcpSocket} from "./socket";
 import {Transmit} from "./xmit";
 
-export interface IAgentEvent {
-  onAgentConnected(agent: number): Promise<void>;
-  onDeviceChange(id: number): Promise<void>;
-  onAgentEnd(agent: number): Promise<void>;
-  onAgentError(agent: number, err: Error): Promise<void>;
-  onTxDrain(agent: number): Promise<void>;
-}
-
-export interface IPanLEvent {
-  onReportUUID(path: PanLPath, uuid: Buffer): Promise<void>;
-  onStatus(path: PanLPath, status: number): Promise<void>;
-  onGetTime(path: PanLPath): Promise<void>;
-  onRequestFirmware(path: PanLPath): Promise<void>;
-  onPasscode(path: PanLPath, code: number): Promise<void>;
-  onRFID(path: PanLPath, epc: Buffer): Promise<void>;
-  onGetTimeline(path: PanLPath, req: ITimelineRequest): Promise<void>;
-  onGetMeetingInfo(path: PanLPath, id: number, getBody: boolean):
-  Promise<void>;
-  onCreateBooking(path: PanLPath, entry: ITimelineEntry): Promise<void>;
-  onExtendMeeting(path: PanLPath, entry: ITimelineEntry): Promise<void>;
-  onCancelUnclaimedMeeting(path: PanLPath, id: number): Promise<void>;
-  onEndMeeting(path: PanLPath, id: number): Promise<void>;
-  onCancelMeeting(path: PanLPath, id: number): Promise<void>;
-  onCheckClaimMeeting(path: PanLPath, id: number): Promise<void>;
-}
-
-export interface ICalendarEvent {
-  onCalMgrReady(): Promise<void>;
-  onCalMgrError(err: Error): Promise<void>;
-  onAdd(path: PanLPath, entry: ITimelineEntry): Promise<void>;
-  onDelete(path: PanLPath, id: number): Promise<void>;
-  onUpdate(path: PanLPath, id: number): Promise<void>;
-  onEndTimeChanged(path: PanLPath, entry: ITimelineEntry): Promise<void>;
-}
-
 export class PanLService implements IAgentEvent, IPanLEvent, ICalendarEvent {
-  public static async getInstance(): Promise<PanLService> {
-    if (!PanLService.instance) {
-      PanLService.db = await Database.getInstance();
-      PanLService.cache = await Cache.getInstance();
-      PanLService.instance = new PanLService(await Persist.getHubConfig(),
-        await Persist.getPanlConfig());
-    } else {
-      PanLService.instance.addRef();
-    }
-    return PanLService.instance;
+  public static async getInstance():
+  Promise<[PanLService, () => Promise<void>]> {
+    const db = await Database.getInstance();
+    const cache = await Cache.getInstance();
+    const cal = new CalendarManager(cache,
+      await Persist.getHubConfig(),
+      await Persist.getPanlConfig(),
+    );
+    const transport = new TcpSocket(0xF7D1);
+    const service = new PanLService(cache, cal, transport);
+    await service.start();
+
+    return [service, async () => {
+      await service.stop();
+      await cache.stop();
+      await db.stop();
+    }];
   }
 
-  private static instance: PanLService;
-  private static cache: Cache;
-  private static db: Database;
-
   private tx: Transmit;
-  private cal: CalendarManager;
   private newDayJob: NodeJS.Timer;
 
-  private constructor(private hub: IHubConfig, private panl: IPanlConfig,
-                      private refCnt = 1) {
-    this.tx = new Transmit(this, this);
-    this.cal = new CalendarManager(PanLService.cache, this, hub, panl);
-    this.cal.connect();
+  public constructor(private cache: Cache,
+                     private cal: CalendarManager,
+                     private transport: IMessageTransport) {
+    this.tx = new Transmit(this.transport);
     this.setupNewDayTask();
   }
 
+  public async start() {
+    await this.transport.start(this, this);
+    await this.cal.connect(this);
+  }
+
   public async stop(): Promise<void> {
-    if (--this.refCnt === 0) {
-      clearTimeout(this.newDayJob);
-      await this.tx.stop();
-      await this.cal.disconnect();
-      await PanLService.cache.stop();
-      await PanLService.db.stop();
-      delete PanLService.instance;
+    clearTimeout(this.newDayJob);
+    await this.transport.stop();
+    // wait async task to finish
+    await this.cal.disconnect();
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  }
+
+  // Agent events
+  public async onAgentConnected(agent: number): Promise<void> {
+    const msgs = [
+      MessageBuilder.buildExpectedFirmwareVersion(),
+      MessageBuilder.buildUUID(),
+      MessageBuilder.buildLangID(),
+      MessageBuilder.buildTimeFormat(),
+      MessageBuilder.buildAccessRight(await Persist.getPanlConfig()),
+      // Build SetTime at last to minimize the latency
+      MessageBuilder.buildTime(),
+    ];
+    /* Broadcast init settings to single agent */
+    try {
+      log.debug(`Broadcast init settings to agent ${agent}`);
+      this.tx.broadcastImmediately(agent, msgs);
+    } catch (err) {
+      log.warn(`Broadcast init settings failed for agent ${agent}: ${err}`);
     }
-  }
-
-  public async onCalMgrReady(): Promise<void> {
-    log.info("Calendar manager is online");
-    await PanLService.cache.consumePending((path) => {
-      this.initPanel(path);
-    });
-  }
-
-  public async onCalMgrError(err: Error): Promise<void> {
-    log.error(`Failed to start Calendar Manager ${err},` +
-      `will try again in 30seconds`);
-    setTimeout(this.cal.connect.bind(this.cal), 30 * 1000);
   }
 
   public async onAgentEnd(id: number): Promise<void> {
     log.debug(`Agent ${id} end notification`);
-    await PanLService.cache.removeAgent(id);
+    await this.cache.removeAgent(id);
   }
 
   public async onAgentError(id: number, err: Error): Promise<void> {
@@ -111,24 +89,25 @@ export class PanLService implements IAgentEvent, IPanLEvent, ICalendarEvent {
   }
 
   public async onDeviceChange(id: number): Promise<void> {
-    await PanLService.cache.removeAgent(id);
+    await this.cache.removeAgent(id);
     await this.onAgentConnected(id);
   }
 
+  //  PanL events
   public async onReportUUID(path: PanLPath, uuid: Buffer): Promise<void> {
     const room = await Persist.findPanlRoom(uuid);
 
     if (room !== undefined) {
       log.verbose(`Connect ${path} to room ${room.name}`);
-      await PanLService.cache.addConfigured(path, room);
+      await this.cache.addConfigured(path, room);
       if (this.cal.connected) {
         await this.initPanel(path);
       } else {
-        await PanLService.cache.addPending(path);
+        await this.cache.addPending(path);
       }
     } else {
       this.showUnconfigured(path,
-        await PanLService.cache.addUnconfigured(path, uuid));
+        await this.cache.addUnconfigured(path, uuid));
     }
   }
 
@@ -138,7 +117,11 @@ export class PanLService implements IAgentEvent, IPanLEvent, ICalendarEvent {
 
   public async onGetTime(path: PanLPath): Promise<void> {
     // Must not be combined with other messages to minimize the latency
-    this.tx.sendImmediately(path, [MessageBuilder.buildTime()]);
+    try {
+      this.tx.sendImmediately(path, [MessageBuilder.buildTime()]);
+    } catch (err) {
+      log.warn(`Failed to send time to ${path}: ${err}`);
+    }
   }
 
   public async onRequestFirmware(path: PanLPath): Promise<void> {
@@ -148,11 +131,19 @@ export class PanLService implements IAgentEvent, IPanLEvent, ICalendarEvent {
 
   public async onPasscode(path: PanLPath, code: number): Promise<void> {
     log.debug(`Path ${path} requests passcode authentication`);
-    await this.processAuthResult(path, await Auth.authByPasscode(code));
+    try {
+      await this.processAuthResult(path, await Auth.authByPasscode(code));
+    } catch (err) {
+      log.warn(`Failed to process passcode for ${path}: ${err}`);
+    }
   }
 
   public async onRFID(path: PanLPath, epc: Buffer): Promise<void> {
-    await this.processAuthResult(path, await Auth.authByRFID(epc));
+    try {
+      await this.processAuthResult(path, await Auth.authByRFID(epc));
+    } catch (err) {
+      log.warn(`Failed to process RFID for ${path}: ${err}`);
+    }
   }
 
   public async onGetTimeline(
@@ -253,13 +244,18 @@ export class PanLService implements IAgentEvent, IPanLEvent, ICalendarEvent {
     }
   }
 
-  public async onEndTimeChanged(path: PanLPath, entry: ITimelineEntry):
-  Promise<void> {
-    try {
-      this.tx.send(path, [MessageBuilder.buildMeetingEndTimeChanged(entry)]);
-    } catch (err) {
-      log.warn(`Extend meeting notification failed for ${path}: ${err}`);
-    }
+  // Calendar events
+  public async onCalMgrReady(): Promise<void> {
+    log.info("Calendar manager is online");
+    await this.cache.consumePending((path) => {
+      this.initPanel(path);
+    });
+  }
+
+  public async onCalMgrError(err: Error): Promise<void> {
+    log.error(`Failed to start Calendar Manager ${err},` +
+      `will try again in 30seconds`);
+    setTimeout(this.cal.connect.bind(this.cal), 30 * 1000);
   }
 
   public async onAdd(path: PanLPath, entry: ITimelineEntry): Promise<void> {
@@ -288,25 +284,16 @@ export class PanLService implements IAgentEvent, IPanLEvent, ICalendarEvent {
     }
   }
 
-  public async onAgentConnected(agent: number): Promise<void> {
-    const msgs = [
-      MessageBuilder.buildExpectedFirmwareVersion(),
-      MessageBuilder.buildUUID(),
-      MessageBuilder.buildLangID(),
-      MessageBuilder.buildTimeFormat(),
-      MessageBuilder.buildAccessRight(await Persist.getPanlConfig()),
-      // Build SetTime at last to minimize the latency
-      MessageBuilder.buildTime(),
-    ];
-    /* Broadcast init settings to single agent */
+  public async onEndTimeChanged(path: PanLPath, entry: ITimelineEntry):
+  Promise<void> {
     try {
-      log.debug(`Broadcast init settings to agent ${agent}`);
-      this.tx.broadcastImmediately(agent, msgs);
+      this.tx.send(path, [MessageBuilder.buildMeetingEndTimeChanged(entry)]);
     } catch (err) {
-      log.warn(`Broadcast init settings failed for agent ${agent}: ${err}`);
+      log.warn(`Extend meeting notification failed for ${path}: ${err}`);
     }
   }
 
+  //  Private methods
   private async initPanel(path: PanLPath): Promise<void> {
     const now = moment();
     const epoch = now.valueOf();
@@ -323,9 +310,9 @@ export class PanLService implements IAgentEvent, IPanLEvent, ICalendarEvent {
     };
 
     try {
-      const room = await PanLService.cache.getRoomAddress(path);
+      const room = await this.cache.getRoomAddress(path);
       const [name, entriesBefore, entriesAfter] = await Promise.all([
-        PanLService.cache.getRoomName(room),
+        this.cache.getRoomName(room),
         this.cal.getTimeline(path, reqBefore),
         this.cal.getTimeline(path, reqAfter),
       ]);
@@ -346,8 +333,8 @@ export class PanLService implements IAgentEvent, IPanLEvent, ICalendarEvent {
   }
 
   private showUnconfigured(path: PanLPath, id: number) {
+    log.debug(`Request ${path} show id ${id}`);
     try {
-      log.debug(`Request ${path} show id ${id}`);
       this.tx.send(path, [
         MessageBuilder.buildUnconfiguredID(id),
       ]);
@@ -363,13 +350,17 @@ export class PanLService implements IAgentEvent, IPanLEvent, ICalendarEvent {
       this.tx.send(path, msg);
       return;
     }
-    await PanLService.cache.setAuthSuccess(path, email);
+    await this.cache.setAuthSuccess(path, email);
   }
 
   private onNewDayTask(): void {
-    this.tx.broadcastToAllImmediately([MessageBuilder.buildTime()]);
-    this.updateMeetingInfoForAllPanls();
-    this.setupNewDayTask();
+    try {
+      this.tx.broadcastToAllImmediately([MessageBuilder.buildTime()]);
+      this.updateMeetingInfoForAllPanls();
+      this.setupNewDayTask();
+    } catch (err) {
+      log.debug("Failed to start new day task:", err);
+    }
   }
 
   private setupNewDayTask(): void {
@@ -380,9 +371,9 @@ export class PanLService implements IAgentEvent, IPanLEvent, ICalendarEvent {
 
   private async updateMeetingInfoForAllPanls(): Promise<void> {
     const dayStart = moment().startOf("day").valueOf();
-    const rooms = await PanLService.cache.getOnlineRooms();
+    const rooms = await this.cache.getOnlineRooms();
     for (const room of rooms) {
-      const paths = await PanLService.cache.getRoomPanLs(room);
+      const paths = await this.cache.getRoomPanLs(room);
       if (paths.length === 0) {
         continue;
       }
@@ -405,12 +396,12 @@ export class PanLService implements IAgentEvent, IPanLEvent, ICalendarEvent {
     } else if (entries.length === 1) {
       msgs = [...MessageBuilder.buildTimeline(entries, id),
         ...MessageBuilder.buildMeetingInfo(
-          await PanLService.cache.getMeetingInfo(room, entries[0].start)),
+          await this.cache.getMeetingInfo(room, entries[0].start)),
       ];
     } else {
       const info = await Promise.all([
-        PanLService.cache.getMeetingInfo(room, entries[0].start),
-        PanLService.cache.getMeetingInfo(room, entries[1].start),
+        this.cache.getMeetingInfo(room, entries[0].start),
+        this.cache.getMeetingInfo(room, entries[1].start),
       ]);
       msgs = [
         ...MessageBuilder.buildTimeline(entries, id),
@@ -419,9 +410,5 @@ export class PanLService implements IAgentEvent, IPanLEvent, ICalendarEvent {
       ];
     }
     return msgs;
-  }
-
-  private addRef(): void {
-    this.refCnt++;
   }
 }

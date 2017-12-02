@@ -5,9 +5,9 @@ import {Cache} from "../../src/cache";
 import {CalendarManager, ITimelineEntry} from "../../src/calendar";
 import {Database} from "../../src/database";
 import {Room} from "../../src/entity/hub/room";
+import {ICalendarEvent} from "../../src/interface";
 import {PanLPath} from "../../src/path";
 import {CalendarType, Persist} from "../../src/persist";
-import {ICalendarEvent} from "../../src/service";
 
 class CalendarEventConsumer implements ICalendarEvent {
   public async onCalMgrReady(): Promise<void> {
@@ -53,7 +53,7 @@ describe("Mockup calendar module", () => {
       password: "",
       readonly: false});
     cache = await Cache.getInstance();
-    cal = new CalendarManager(cache, consumer, await Persist.getHubConfig(),
+    cal = new CalendarManager(cache, await Persist.getHubConfig(),
                               await Persist.getPanlConfig());
   });
   after(async () => {
@@ -67,7 +67,7 @@ describe("Mockup calendar module", () => {
   describe("getTimeline", () => {
     const id = at("2017-12-01 14:30");
     it("should able to connect", async () => {
-      await cal.connect();
+      await cal.connect(consumer);
       assert(cal);
       assert(cal.connected);
       const room = await Persist.findRoom(roomName);

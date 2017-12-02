@@ -3,9 +3,9 @@ import ref = require("ref");
 import ArrayType = require("ref-array");
 import StructType = require("ref-struct");
 import {ITimelineRequest} from "./calendar";
+import {IAgentEvent, IPanLEvent} from "./interface";
 import {log} from "./log";
 import {PanLPath} from "./path";
-import {IAgentEvent, IPanLEvent} from "./service";
 
 enum Incoming {
   REPORT_AGENT_ID,

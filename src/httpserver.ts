@@ -3,24 +3,15 @@ import {Server} from "http";
 import * as path from "path";
 import {api} from "./api";
 import {log} from "./log";
+import {PanLService} from "./service";
 
 export class HttpServer {
-  public static getInstance(): HttpServer {
-    if (HttpServer.instance) {
-      HttpServer.instance.addRef();
-    } else {
-      HttpServer.instance = new HttpServer(
-        process.env.NODE_ENV === "production" ? 80 : 8080);
-    }
-    return HttpServer.instance;
-  }
-
-  private static instance: HttpServer;
   private app: express.Application;
   private server: Server;
 
-  private constructor(private port: number, private refCnt = 1) {
+  public constructor(private srv: PanLService, private port: number) {
     this.app = express();
+    this.app.locals.service = srv;
     this.app.use(express.urlencoded({extended: true}));
     this.app.use(express.json());
     this.app.use("/api", api);
@@ -34,14 +25,7 @@ export class HttpServer {
     });
   }
 
-  public stop(): void {
-    if (--this.refCnt === 0) {
-      this.server.close();
-      delete HttpServer.instance;
-    }
-  }
-
-  private addRef(): void {
-    this.refCnt++;
+  public async stop() {
+    await new Promise<void>((accept) => this.server.close(accept));
   }
 }

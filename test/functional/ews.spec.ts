@@ -5,10 +5,10 @@ import {Cache} from "../../src/cache";
 import {CalendarManager, ITimelineEntry} from "../../src/calendar";
 import {Database} from "../../src/database";
 import {Room} from "../../src/entity/hub/room";
+import {ICalendarEvent} from "../../src/interface";
 import {log} from "../../src/log";
 import {PanLPath} from "../../src/path";
 import {CalendarType, Persist} from "../../src/persist";
-import {ICalendarEvent} from "../../src/service";
 
 class CalendarEventConsumer implements ICalendarEvent {
   public async onCalMgrReady(): Promise<void> {
@@ -59,9 +59,9 @@ describe("EWS module", () => {
       password: "T@nt3sting",
       readonly: false,
     });
-    cal = new CalendarManager(cache, consumer, await Persist.getHubConfig(),
+    cal = new CalendarManager(cache, await Persist.getHubConfig(),
                               await Persist.getPanlConfig());
-    await cal.connect();
+    await cal.connect(consumer);
   });
 
   after(async function cleanup() {

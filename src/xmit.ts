@@ -1,14 +1,7 @@
 import * as assert from "assert";
 import {MessageBuilder} from "./builder";
+import {IMessageTransport} from "./interface";
 import {PanLPath} from "./path";
-import {IAgentEvent, IPanLEvent} from "./service";
-import {PanLSocketController} from "./socket";
-
-export interface IMessageTransport {
-  onGlobalBroadcast(bufs: Buffer[]): void;
-  onSend(path: PanLPath, bufs: Buffer[]): void;
-  onStop(): void;
-}
 
 interface IQueuedBuffer {
   bufs: Buffer[];
@@ -16,53 +9,28 @@ interface IQueuedBuffer {
 }
 
 export class Transmit {
-  public static getTotalLength(payloads: Buffer[]): number {
-      let total = 0;
-
-      for (const payload of payloads) {
-          total += payload.length;
-      }
-      return total;
-  }
-
   private static getBroadcastAddr(agent: number): PanLPath {
       return new PanLPath(agent, MessageBuilder.BROADCAST_ADDR);
   }
 
   private free: boolean;
-  private tx: IMessageTransport;
-
-  constructor(agentEvt: IAgentEvent, panlEvt: IPanLEvent) {
-    if (agentEvt === undefined || panlEvt === undefined) {
-      throw(new Error("Invalid parameter"));
-    }
-    try {
-      this.tx = new PanLSocketController(0xF7D1, agentEvt, panlEvt);
-    } catch (e) {
-      throw(new Error(`Unable to start controller, exit now.` +
-        ` Err: ${e.toString()}`));
-    }
-  }
-
-  public async stop(): Promise<void> {
-    this.tx.onStop();
-    await new Promise((resolve) => setTimeout(resolve, 10));
+  constructor(private transport: IMessageTransport) {
   }
 
   public broadcastToAllImmediately(bufs: Buffer[]): void {
     /* Global broadcast should always been send out immediately */
     this.free = false;
-    this.tx.onGlobalBroadcast(bufs);
+    this.transport.onGlobalBroadcast(bufs);
   }
 
   public broadcastImmediately(agent: number, bufs: Buffer[]): void {
     this.free = false;
-    this.tx.onSend(Transmit.getBroadcastAddr(agent), bufs);
+    this.transport.onSend(Transmit.getBroadcastAddr(agent), bufs);
   }
 
   public sendImmediately(path: PanLPath, bufs: Buffer[]): void {
     this.free = false;
-    this.tx.onSend(path, bufs);
+    this.transport.onSend(path, bufs);
   }
 
   public broadcast(agent: number, bufs: Buffer[]): void {
