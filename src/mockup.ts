@@ -10,6 +10,8 @@ import {PanLPath} from "./path";
 import {IHubConfig, Persist} from "./persist";
 
 const at = (s: string) => moment(s).valueOf();
+export const utRoom = "unittest@ftdichip.com";
+export const utQueryTime = at("2018-01-08 14:30");
 
 interface IFakeAuth {
   email: string;
@@ -18,8 +20,14 @@ interface IFakeAuth {
   rfids?: Buffer[];
 }
 
+enum Recurring {
+  None,
+  Weekly,
+}
+
 interface IFakeMeeting {
   timeline: ITimelineEntry;
+  recurring: Recurring;
   subject: string;
   attendees: string[]; // First person will be organizer
 }
@@ -41,40 +49,46 @@ const auths: IFakeAuth[] = [
   } , {
     email: "rfid@ftdichip.com",
     name: "Jane Doe",
-    rfids: [Buffer.from([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12])],
+    rfids: [Buffer.from([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10])],
   } , {
     email: "fred@ftdichip.com",
     name: "Fred Dart",
     passcode: 0x888888,
     rfids: [
-      Buffer.from([1, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]),
-      Buffer.from([2, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]),
+      Buffer.from([1, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10]),
+      Buffer.from([2, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10]),
     ],
   },
 ];
 
 const rooms: IFakeRoom[] = [
 {
+  // Room for CES demo
   room: "sentosa@ftdichip.com",
   name: "Sentosa",
   meetings: [{
-    timeline: {start: at("2017-12-01 08:30"), end: at("2017-12-01 10:00")},
+    // Monday, one day before CES 2018
+    timeline: {start: at("2018-01-08 08:30"), end: at("2018-01-08 10:00")},
+    recurring: Recurring.Weekly,
+    subject: "PanL software development weekly meeting",
+    attendees: [
+      "passcode@ftdichip.com", "fred@ftdichip.com", "rfid@ftdichip.com",
+    ],
+  } , {
+    timeline: {start: utQueryTime, end: at("2018-01-08 15:00")},
+    recurring: Recurring.None,
     subject: "MRBS weekly",
     attendees: [
       "passcode@ftdichip.com", "fred@ftdichip.com", "rfid@ftdichip.com",
     ],
   } , {
-    timeline: {start: at("2017-12-01 14:30"), end: at("2017-12-01 15:00")},
-    subject: "MRBS weekly",
-    attendees: [
-      "passcode@ftdichip.com", "fred@ftdichip.com", "rfid@ftdichip.com",
-    ],
-  } , {
-    timeline: {start: at("2017-12-02 09:30"), end: at("2017-12-02 10:00")},
+    timeline: {start: at("2018-01-09 09:30"), end: at("2018-01-09 10:00")},
+    recurring: Recurring.None,
     subject: "ID Design",
     attendees: ["rfid@ftdichip.com", "fred@ftdichip.com"],
   } , {
-    timeline: {start: at("2017-12-04 09:30"), end: at("2017-12-04 10:00")},
+    timeline: {start: at("2018-01-10 09:30"), end: at("2018-01-10 10:00")},
+    recurring: Recurring.None,
     subject: "Hardware Design",
     attendees: [
       "fred@ftdichip.com", "passcode@ftdichip.com", "rfid@ftdichip.com",
@@ -82,23 +96,21 @@ const rooms: IFakeRoom[] = [
   }],
 },
 {
-  room: "test@ftdichip.com",
-  name: "Test",
+  room: utRoom,
+  name: "Unit Test",
   meetings: [{
-    timeline: {start: at("2017-12-01 14:30"), end: at("2017-12-01 15:00")},
-    subject: "MRBS weekly",
+    timeline: {start: at("2018-01-08 08:30"), end: at("2018-01-08 10:00")},
+    recurring: Recurring.Weekly,
+    subject: "PanL software development weekly meeting",
     attendees: [
       "passcode@ftdichip.com", "fred@ftdichip.com", "rfid@ftdichip.com",
     ],
   } , {
-    timeline: {start: at("2017-12-02 09:30"), end: at("2017-12-02 10:00")},
-    subject: "ID Design",
-    attendees: ["rfid@ftdichip.com", "fred@ftdichip.com"],
-  } , {
-    timeline: {start: at("2017-12-04 09:30"), end: at("2017-12-04 10:00")},
-    subject: "Hardware Design",
+    timeline: {start: utQueryTime, end: at("2018-01-08 15:00")},
+    recurring: Recurring.None,
+    subject: "MRBS weekly",
     attendees: [
-      "fred@ftdichip.com", "passcode@ftdichip.com", "rfid@ftdichip.com",
+      "passcode@ftdichip.com", "fred@ftdichip.com", "rfid@ftdichip.com",
     ],
   }],
 },
@@ -124,25 +136,43 @@ export class MockupCalendar implements ICalendar {
     ]);
   }
 
-  public async getTimeline(room: string, id: number): Promise<boolean> {
+  public async getTimeline(room: string, id: number):
+  Promise<ITimelineEntry[]> {
+    const queryDay = moment(id).startOf("day");
     const meetings = MockupCalendar.getMeetings(room);
     if (!meetings) {
-      return false;
+      return [];
     }
     const entries: ITimelineEntry[] = [];
+
     for (const meeting of meetings) {
-      if (moment(meeting.timeline.start).isSame(moment(id), "day")) {
-        entries.push(meeting.timeline);
-        await this.cache.setMeetingInfo(room, meeting.timeline.start, {
-          subject: meeting.subject,
-          organizer: await Auth.getEmployeeName(meeting.attendees[0]),
-        });
+      const entryStart = moment(meeting.timeline.start);
+      const days = queryDay.diff(entryStart.clone().startOf("day"), "days");
+
+      let entry;
+      switch (meeting.recurring) {
+      case Recurring.None:
+        if (entryStart.valueOf() === queryDay.valueOf()) {
+          entry = meeting.timeline;
+        }
+      case Recurring.Weekly:
+        if (entryStart.weekday() === queryDay.weekday()) {
+          entry = {
+            start: moment(meeting.timeline.start).add(days, "days").valueOf(),
+            end: moment(meeting.timeline.end).add(days, "days").valueOf(),
+          };
+        }
       }
+      if (!entry) {
+        continue;
+      }
+      entries.push(entry);
+      await this.cache.setMeetingInfo(room, entry.start, {
+        subject: meeting.subject,
+        organizer: await Auth.getEmployeeName(meeting.attendees[0]),
+      });
     }
-    if (entries.length) {
-      await this.cache.setTimeline(room, id, entries);
-    }
-    return true;
+    return entries;
   }
 
   public async createBooking(room: string, entry: ITimelineEntry,
@@ -207,9 +237,22 @@ export class MockupCalendar implements ICalendar {
       return false;
     }
     for (const meeting of meetings) {
-      if (meeting.timeline.start === id) {
-        return -1 !== meeting.attendees.indexOf(email);
+      switch (meeting.recurring) {
+      case Recurring.None:
+        if (meeting.timeline.start !== id) {
+          continue;
+        }
+      case Recurring.Weekly:
+        const query = moment(id);
+        const entryStart = moment(meeting.timeline.start);
+        if (query.weekday() !== entryStart.weekday()) {
+          continue;
+        }
+        if (query.format("HHmmss") !== entryStart.format("HHmmss")) {
+          continue;
+        }
       }
+      return -1 !== meeting.attendees.indexOf(email);
     }
     return false;
   }
@@ -223,7 +266,7 @@ export class MockupCalendar implements ICalendar {
         try {
           await Auth.setPasscode(employee, auth.passcode);
         } catch (err) {
-          log.silly("Failed to set authentication data,", err);
+          continue;
         }
       }
       if (auth.rfids) {

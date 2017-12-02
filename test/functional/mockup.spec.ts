@@ -6,6 +6,7 @@ import {CalendarManager, ITimelineEntry} from "../../src/calendar";
 import {Database} from "../../src/database";
 import {Room} from "../../src/entity/hub/room";
 import {ICalendarEvent} from "../../src/interface";
+import {utQueryTime, utRoom} from "../../src/mockup";
 import {PanLPath} from "../../src/path";
 import {CalendarType, Persist} from "../../src/persist";
 
@@ -55,6 +56,11 @@ describe("Mockup calendar module", () => {
     cache = await Cache.getInstance();
     cal = new CalendarManager(cache, await Persist.getHubConfig(),
                               await Persist.getPanlConfig());
+    await cal.connect(consumer);
+    const room = await Persist.findRoom(utRoom);
+    if (room) {
+      await cache.addConfigured(path, room);
+    }
   });
   after(async () => {
     await cal.disconnect();
@@ -63,42 +69,27 @@ describe("Mockup calendar module", () => {
   });
 
   const at = (s: string) => moment(s).valueOf();
-  const roomName = "sentosa@ftdichip.com";
   describe("getTimeline", () => {
-    const id = at("2017-12-01 14:30");
-    it("should able to connect", async () => {
-      await cal.connect(consumer);
-      assert(cal);
-      assert(cal.connected);
-      const room = await Persist.findRoom(roomName);
-      if (!room) {
-        assert(0);
-      } else {
-        await cache.addConfigured(path, room);
-      }
-      expect(room).to.not.equal(undefined);
-    });
     it("should return two busy slots by default", async () => {
       assert(cal !== undefined);
       const req = {
-        id : moment(id).startOf("day").valueOf(),
+        id : moment(utQueryTime).startOf("day").valueOf(),
         lookForward: true,
         maxCount: 255,
       };
-      const entires = await cal.getTimeline(path, req);
-      expect(entires.length).to.equal(2);
+      expect((await cal.getTimeline(path, req)).length).to.equal(2);
+      req.id = moment(req.id).add(1, "week").valueOf();
+      expect((await cal.getTimeline(path, req)).length).to.equal(2);
     });
     it("should only return one busy slot in the morning", async () => {
       assert(cal !== undefined);
-      const req = {id, lookForward: false, maxCount: 255};
-      const entires = await cal.getTimeline(path, req);
-      expect(entires.length).to.equal(1);
+      const req = {id: utQueryTime, lookForward: false, maxCount: 255};
+      expect((await cal.getTimeline(path, req)).length).to.equal(1);
     });
     it("should only return one busy slot in the afternoon", async () => {
       assert(cal !== undefined);
-      const req = {id, lookForward: true, maxCount: 255};
-      const entires = await cal.getTimeline(path, req);
-      expect(entires.length).to.equal(1);
+      const req = {id: utQueryTime, lookForward: true, maxCount: 255};
+      expect((await cal.getTimeline(path, req)).length).to.equal(1);
     });
   });
   describe("meeting", () => {
@@ -109,15 +100,12 @@ describe("Mockup calendar module", () => {
 
       await cache.setAuthSuccess(path, "panl@ftdichip.com");
       // Remove all timelines first
-      await cache.setTimeline(roomName, id, []);
-      let entries = await cal.getTimeline(path, req);
-      expect(entries.length).to.equal(0);
+      await cache.setTimeline(utRoom, id, []);
+      expect((await cal.getTimeline(path, req)).length).to.equal(0);
       await cal.createBooking(path, {start: id, end});
-      entries = await cal.getTimeline(path, req);
-      expect(entries.length).to.equal(1);
+      expect((await cal.getTimeline(path, req)).length).to.equal(1);
       await cal.createBooking(path, {start: id, end});
-      entries = await cal.getTimeline(path, req);
-      expect(entries.length).to.equal(1);
+      expect((await cal.getTimeline(path, req)).length).to.equal(1);
     });
   });
 });

@@ -274,13 +274,8 @@ export class MessageBuilder {
     const pm = Number(now.format("HH")) >= 12;
     const dayStart = moment(id).startOf("day");
     const dayOffset = dayStart.diff(now.startOf("day"), "days");
-    const getMinutes = (epoch: number) => {
-      const minutes = moment(epoch).diff(dayStart, "minutes");
-      if (minutes < 0 || minutes >= 24 * 60) {
-        throw(new Error("Wrong epoch time:" + epoch));
-      }
-      return minutes;
-    };
+    const getMinutes =
+      (epoch: number) => moment(epoch).diff(dayStart, "minutes");
     if (dayOffset < -128 || dayOffset > 127) {
       throw(new Error("Wrong dayOffset:" + dayOffset));
     }

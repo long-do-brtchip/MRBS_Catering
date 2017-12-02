@@ -28,7 +28,7 @@ export interface ITimelineRequest {
 }
 
 export interface ICalendar {
-  getTimeline(room: string, id: number): Promise<boolean>;
+  getTimeline(room: string, id: number): Promise<ITimelineEntry[]>;
   createBooking(room: string, entry: ITimelineEntry, email: string):
   Promise<ErrorCode>;
   extendMeeting(room: string, entry: ITimelineEntry, email: string):
@@ -70,8 +70,18 @@ export class CalendarManager implements ICalendarNotification {
     const room = await this.cache.getRoomAddress(path);
     let entries = await this.cache.getTimeline(room, req);
     if (entries === undefined) {
-      const isHave = await this.calendar.getTimeline(room, req.id);
-      entries = isHave ? (await this.cache.getTimeline(room, req) || []) : [];
+      entries = await this.calendar.getTimeline(room, req.id);
+      log.silly(`Save ${entries.length} entries for ` +
+        moment(req.id).startOf("day").calendar());
+      for (const entry of entries) {
+        log.silly("entry starts: " + moment(entry.start).calendar() +
+         ", ends:" + moment(entry.end).calendar());
+      }
+      await this.cache.setTimeline(room, req.id, entries);
+      entries = await this.cache.getTimeline(room, req);
+      if (entries === undefined) {
+        return [];
+      }
     }
     return entries;
   }

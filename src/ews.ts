@@ -59,7 +59,7 @@ export class EWSCalendar implements ICalendar, IRoomStatusChange {
   }
 
   public async getTimeline(room: string, id: number):
-  Promise<boolean> {
+  Promise<ITimelineEntry[]> {
     const result: ITimelineEntry[] = [];
     const from = new DateTime(moment(id).startOf("day").valueOf());
     const view = new CalendarView(from, from.AddDays(1));
@@ -69,7 +69,7 @@ export class EWSCalendar implements ICalendar, IRoomStatusChange {
       WellKnownFolderName.Calendar, view);
 
     if (!meetingResponse || !meetingResponse.Items.length) {
-      return false;
+      return result;
     }
 
     const task: any[] = [];
@@ -83,9 +83,8 @@ export class EWSCalendar implements ICalendar, IRoomStatusChange {
         {subject: meeting.Subject, organizer: meeting.Organizer.Name}));
       task.push(this.cache.setMeetingUid(room, start, meeting.Id.UniqueId));
     }
-    task.push(this.cache.setTimeline(room, id, result));
     await Promise.all(task);
-    return true;
+    return result;
   }
 
   public async createBooking(room: string, entry: ITimelineEntry,
