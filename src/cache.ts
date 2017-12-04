@@ -95,10 +95,6 @@ export class Cache {
     return `${addr}:${date}`;
   }
 
-  private static getMeetingTime(id: number): string {
-    return moment(id).format("HHmm");
-  }
-
   private roomSubsribers: IRoomStatusChange[] = [];
 
   private constructor(private client: redis.Redis,
@@ -126,8 +122,11 @@ export class Cache {
   }
 
   public async consumePending(callback: PendingHandler): Promise<void> {
-    const list = await this.client.smembers(
-      Cache.PENDING_KEY).map((i: string) => {
+    const pending = await this.client.smembers(Cache.PENDING_KEY);
+    if (!pending) {
+      return;
+    }
+    const list = pending.map((i: string) => {
       const t = JSON.parse(i);
       return new PanLPath(t.agentID, t.mstpAddress);
     });
@@ -140,7 +139,7 @@ export class Cache {
 
   public async addConfigured(path: PanLPath, room: Room): Promise<void> {
     if (await this.client.exists(Cache.pathToIdKey(path))) {
-      const id = await this.client.get(Cache.pathToIdKey(path));
+      const id = Number(await this.client.get(Cache.pathToIdKey(path)));
       this.client.del(Cache.pathToIdKey(path));
       this.client.del(Cache.idToPathKey(id));
       this.client.del(Cache.idToUuidKey(id));
@@ -160,7 +159,7 @@ export class Cache {
 
   public async addUnconfigured(path: PanLPath, uuid: Buffer): Promise<number> {
     if (await this.client.exists(Cache.pathToIdKey(path))) {
-      const id = await this.client.get(Cache.pathToIdKey(path));
+      const id = Number(await this.client.get(Cache.pathToIdKey(path)));
       await this.client.set(Cache.idToUuidKey(id), uuid);
       return id;
     }
@@ -262,7 +261,7 @@ export class Cache {
     const pipeline: redis.Pipeline = this.client.pipeline();
     pipeline.del(key);
     for (const entry of entries) {
-      pipeline.zadd(key, entry.start, entry.end);
+      pipeline.zadd(key, entry.start.toString(), entry.end.toString());
     }
     await Promise.all([
       pipeline.exec(),
@@ -287,13 +286,13 @@ export class Cache {
     }
     if (req.lookForward) {
       const ret = await this.client.zrangebyscore(key, req.id, "+inf",
-        "WITHSCORES", "LIMIT", 0, req.maxCount);
+        "WITHSCORES", "LIMIT", "0", req.maxCount.toString());
       for (let i = 0; i < ret.length; i += 2) {
         entries.push({start: Number(ret[i + 1]), end: Number(ret[i])});
       }
     } else {
       const ret = await this.client.zrevrangebyscore(key, `(${req.id}`, "-inf",
-        "WITHSCORES", "LIMIT", 0, req.maxCount);
+        "WITHSCORES", "LIMIT", "0", req.maxCount.toString());
       for (let i = 0; i < ret.length; i += 2) {
         entries.unshift({start: Number(ret[i + 1]), end: Number(ret[i])});
       }
@@ -314,7 +313,8 @@ export class Cache {
     const pipeline: redis.Pipeline = this.client.pipeline();
     const key = Cache.TIMELINE_PREFIX + Cache.roomDateKey(room, entry.start);
     const del = pipeline.zremrangebyscore(key, entry.start, entry.start);
-    await pipeline.zadd(key, entry.start, entry.end).exec();
+    await pipeline.zadd(key, entry.start.toString(),
+                        entry.end.toString()).exec();
   }
 
   public async getTimelineEntryEndTime(room: string, id: number):
@@ -332,8 +332,7 @@ export class Cache {
     const key = Cache.TIMELINE_PREFIX + roomDateKey;
     this.client.zremrangebyscore(key, id, id);
     // Remove meeting info
-    this.client.del(Cache.MEETING_PREFIX + roomDateKey +
-      Cache.getMeetingTime(id));
+    this.client.hdel(Cache.MEETING_PREFIX + roomDateKey, id.toString());
     // Remove meeting UID
     try {
       const uid = await this.getMeetingUid(room, id);
@@ -346,36 +345,32 @@ export class Cache {
 
   public async setMeetingInfo(room: string, id: number, info: IMeetingInfo):
   Promise<void> {
-    const key = Cache.MEETING_PREFIX + Cache.roomDateKey(room, id) +
-      ":" + Cache.getMeetingTime(id);
-    await this.client.hmset(key, info);
+    const key = Cache.MEETING_PREFIX + Cache.roomDateKey(room, id);
+    await this.client.hset(key, id.toString(), JSON.stringify(info));
   }
 
   public async getMeetingInfo(room: string, id: number):
   Promise<IMeetingInfo> {
-    const key = Cache.MEETING_PREFIX + Cache.roomDateKey(room, id) +
-      ":" + Cache.getMeetingTime(id);
-    const result: IMeetingInfo = await this.client.hgetall(key);
-    if (!result || Object.keys(result).length === 0) {
+    const key = Cache.MEETING_PREFIX + Cache.roomDateKey(room, id);
+    const val = await this.client.hget(key, id.toString());
+    if (!val) {
       throw new Error("Meeting info not found");
     }
-    return result;
+    return JSON.parse(val);
   }
 
   public async setMeetingUid(room: string, id: number, meetingId: string):
   Promise<void> {
     const pipeline: redis.Pipeline = this.client.pipeline();
-    // For getMeetingRoomFromUid
-    pipeline.zadd(Cache.MEETINGUID_KEY, room, meetingId);
     // For getMeetingUid
     const key = `${Cache.MEETINGUID_KEY}:${room}`;
-    pipeline.zadd(key, id, meetingId);
+    pipeline.zadd(key, id.toString(), meetingId);
     await pipeline.exec();
   }
 
   public async getMeetingUid(room: string, id: number): Promise<string> {
     const key = `${Cache.MEETINGUID_KEY}:${room}`;
-    const ret = await this.client.zrangebyscore(key, id, id, "LIMIT", 0, 1);
+    const ret = await this.client.zrangebyscore(key, id, id, "LIMIT", "0", "1");
     if (ret.length === 0) {
       throw(new Error("Meeting Id not found"));
     }
@@ -386,10 +381,6 @@ export class Cache {
   Promise<number> {
     return Number(
       await this.client.zscore(`${Cache.MEETINGUID_KEY}:${room}`, uid));
-  }
-
-  public async getMeetingRoomFromUid(uid: string): Promise<string> {
-    return this.client.zscore(Cache.MEETINGUID_KEY, uid);
   }
 
   public async setAuthSuccess(path: PanLPath, email: string): Promise<void> {
