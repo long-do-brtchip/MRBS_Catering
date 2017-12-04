@@ -217,7 +217,18 @@ export class EWSCalendar implements ICalendar, IRoomStatusChange {
       if (attendee.Address.toLowerCase() === email) {
         return true;
       }
+      try {
+        const emailGroup = await this.service.ExpandGroup(attendee.Address);
+        for (const member of emailGroup.Members) {
+          if (member.Address.toLowerCase() === email) {
+            return true;
+          }
+        }
+      } catch (error) {
+        log.debug("EWSCalendar.isAttendeeInMeeting()::", error.message);
+      }
     }
+
     return false;
   }
 
@@ -267,13 +278,12 @@ export class EWSCalendar implements ICalendar, IRoomStatusChange {
       end: EWSCalendar.minuteBased(appt.End.TotalMilliSeconds),
     };
 
-    if (await !this.cache.isTimelineCachedForDay(room, entry.start)) {
+    if (!await this.cache.isTimelineCachedForDay(room, entry.start)) {
       // No PanL is interested with this new meeting
       return;
     }
 
     if (type === EventType.Created) {
-      log.error("TODO: get meeting room address");
       Promise.all([
         this.cache.setMeetingInfo(room, entry.start, info),
         this.cache.setMeetingUid(room, entry.start, uid),
@@ -329,11 +339,12 @@ export class EWSCalendar implements ICalendar, IRoomStatusChange {
     });
     // Auto reconnect
     sub.OnDisconnect.push((conn) => {
-      if (!this.stopped) {
+      if (!this.stopped && this.subMap.has(room)) {
         conn.Open();
-        this.subMap.set(room, conn);
+        log.debug("EWS StreamSubscription re-open: ", room);
       } else {
         this.subMap.delete(room);
+        log.debug("EWS StreamSubscription close: ", room);
       }
     });
     // Open connected
