@@ -62,4 +62,3 @@ dist/
 .idea
 .idea/workspace.xml
 *.db
-package-lock.json
