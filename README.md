@@ -31,7 +31,6 @@ origin  git@github.com:ftdichipsg/MRBS.git (push)
 ## Environment setup
 * `node.js` version: v8.9.0 or later, LTS version
 * `redis`: listen on default port (6379) of localhost
-* `TypeScript`: version 2.5.3 is preferred at the moment. 2.6.1 API change breaks YCM code completer
 
 ## Editor setup
 ### vim
