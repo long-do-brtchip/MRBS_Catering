@@ -120,7 +120,7 @@ export class CalendarManager implements ICalendarNotification {
         return ErrorCode.ERROR_AUTH_ERROR;
       }
       if (!await this.calendar.isAttendeeInMeeting(room, entry.start, email)) {
-        return ErrorCode.ERROR_AUTH_ERROR;
+        return ErrorCode.ERROR_ACCESS_DENIED;
       }
     }
     return this.calendar.extendMeeting(room, entry, email);
@@ -138,7 +138,7 @@ export class CalendarManager implements ICalendarNotification {
         return ErrorCode.ERROR_AUTH_ERROR;
       }
       if (!await this.calendar.isAttendeeInMeeting(room, id, email)) {
-        return ErrorCode.ERROR_AUTH_ERROR;
+        return ErrorCode.ERROR_ACCESS_DENIED;
       }
     }
     if (id < moment().add(1, "minutes").valueOf()) {
@@ -162,7 +162,7 @@ export class CalendarManager implements ICalendarNotification {
         return ErrorCode.ERROR_AUTH_ERROR;
       }
       if (!await this.calendar.isAttendeeInMeeting(room, id, email)) {
-        return ErrorCode.ERROR_AUTH_ERROR;
+        return ErrorCode.ERROR_ACCESS_DENIED;
       }
     }
     return this.calendar.cancelMeeting(room, id, email);
@@ -181,7 +181,7 @@ export class CalendarManager implements ICalendarNotification {
       }
       if (!await this.calendar.isAttendeeInMeeting(
             await this.cache.getRoomAddress(path), id, email)) {
-        return ErrorCode.ERROR_AUTH_ERROR;
+        return ErrorCode.ERROR_ACCESS_DENIED;
       }
     }
     return ErrorCode.ERROR_SUCCESS;

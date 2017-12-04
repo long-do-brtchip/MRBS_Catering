@@ -75,7 +75,7 @@ const rooms: IFakeRoom[] = [
       "passcode@ftdichip.com", "fred@ftdichip.com", "rfid@ftdichip.com",
     ],
   } , {
-    timeline: {start: utQueryTime, end: at("2018-01-08 15:00")},
+    timeline: {start: at("2018-01-08 17:00"), end: at("2018-01-08 18:00")},
     recurring: Recurring.None,
     subject: "MRBS weekly",
     attendees: [
