@@ -390,7 +390,7 @@ export class Cache {
   public async getAuth(path: PanLPath): Promise<string> {
     const key = Cache.authKey(path);
     if (await this.client.exists(key)) {
-      const email = this.client.get(key);
+      const email = await this.client.get(key);
       await this.client.del(key);
       return email;
     } else {
