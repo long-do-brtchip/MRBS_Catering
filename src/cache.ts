@@ -57,12 +57,12 @@ export class Cache {
 
   private static readonly SEQUENCE_KEY = "sequence";
   private static readonly PENDING_KEY = "pending";
-  private static readonly MEETINGUID_PREFIX = "meetingid:";
-  private static readonly ROOMNAME_KEY = "roomname:";
+  private static readonly ROOMNAME_KEY = "roomname";
   private static readonly PANLS_PREFIX = "panls:";
   private static readonly SHADOW_PREFIX = "shadow:";
   private static readonly TIMELINE_PREFIX = "timeline:";
   private static readonly MEETING_PREFIX = "meeting:";
+  private static readonly MEETINGUID_PREFIX = "meetingid:";
   private static readonly KEYSPACE0_PREFIX = `__keyspace@0__:`;
 
   private static pathToIdKey(path: PanLPath): string {
@@ -150,7 +150,7 @@ export class Cache {
       }
     }
     await Promise.all([
-      this.client.set(Cache.ROOMNAME_KEY + room.address, room.name),
+      this.client.hset(Cache.ROOMNAME_KEY, room.address, room.name),
       this.client.set(Cache.addressKey(path), room.address),
       this.client.sadd(Cache.agentKey(path.agent), path.dest),
       this.client.sadd(Cache.PANLS_PREFIX + room.address, JSON.stringify(path)),
@@ -194,14 +194,14 @@ export class Cache {
       const room = await this.getRoomAddress(path);
       pipeline.srem(Cache.PANLS_PREFIX + room, JSON.stringify(path));
       pipeline.srem(Cache.PENDING_KEY, path);
-      pipeline.del(Cache.ROOMNAME_KEY + await this.getRoomAddress(path));
+      pipeline.hdel(Cache.ROOMNAME_KEY, await this.getRoomAddress(path));
       pipeline.del(Cache.addressKey(path));
     }
     await pipeline.del(Cache.agentKey(agent)).exec();
   }
 
   public async getRoomName(room: string): Promise<string> {
-    const val = await this.client.get(Cache.ROOMNAME_KEY + room);
+    const val = await this.client.hget(Cache.ROOMNAME_KEY, room);
     if (val === null) {
       throw(new Error(`Can't find room name for ${room}`));
     }
