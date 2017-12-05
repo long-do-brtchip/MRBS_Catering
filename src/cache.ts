@@ -57,7 +57,7 @@ export class Cache {
 
   private static readonly SEQUENCE_KEY = "sequence";
   private static readonly PENDING_KEY = "pending";
-  private static readonly MEETINGUID_KEY = "meetingid";
+  private static readonly MEETINGUID_PREFIX = "meetingid:";
   private static readonly ROOMNAME_KEY = "roomname:";
   private static readonly PANLS_PREFIX = "panls:";
   private static readonly SHADOW_PREFIX = "shadow:";
@@ -336,8 +336,7 @@ export class Cache {
     // Remove meeting UID
     try {
       const uid = await this.getMeetingUid(room, id);
-      await this.client.zrem(Cache.MEETINGUID_KEY, uid);
-      await this.client.zrem(`${Cache.MEETINGUID_KEY}:${room}`, uid);
+      await this.client.zrem(Cache.MEETINGUID_PREFIX + room, uid);
     } catch (err) {
       log.debug(`Not able to find UID for ${roomDateKey}`);
     }
@@ -361,16 +360,13 @@ export class Cache {
 
   public async setMeetingUid(room: string, id: number, meetingId: string):
   Promise<void> {
-    const pipeline: redis.Pipeline = this.client.pipeline();
-    // For getMeetingUid
-    const key = `${Cache.MEETINGUID_KEY}:${room}`;
-    pipeline.zadd(key, id.toString(), meetingId);
-    await pipeline.exec();
+    await this.client.zadd(
+      Cache.MEETINGUID_PREFIX + room, id.toString(), meetingId);
   }
 
   public async getMeetingUid(room: string, id: number): Promise<string> {
-    const key = `${Cache.MEETINGUID_KEY}:${room}`;
-    const ret = await this.client.zrangebyscore(key, id, id, "LIMIT", "0", "1");
+    const ret = await this.client.zrangebyscore(
+      Cache.MEETINGUID_PREFIX + room, id, id, "LIMIT", "0", "1");
     if (ret.length === 0) {
       throw(new Error("Meeting Id not found"));
     }
@@ -380,7 +376,7 @@ export class Cache {
   public async getMeetingStartFromUid(room: string, uid: string):
   Promise<number> {
     return Number(
-      await this.client.zscore(`${Cache.MEETINGUID_KEY}:${room}`, uid));
+      await this.client.zscore(Cache.MEETINGUID_PREFIX + room, uid));
   }
 
   public async setAuthSuccess(path: PanLPath, email: string): Promise<void> {
@@ -441,15 +437,8 @@ export class Cache {
     // Remove meeting UID
     const [room, date] = roomDateKey.split(":");
     const start = moment(date);
-    const uids = await this.client.zremrangebyscore(
-      `${Cache.MEETINGUID_KEY}:${room}`,
+    pipeline.zremrangebyscore(Cache.MEETINGUID_PREFIX + room,
       start.valueOf(), start.endOf("day").valueOf());
-    if (uids) {
-      for (const uid of uids) {
-        pipeline.zrem(Cache.MEETINGUID_KEY, uid);
-      }
-    }
-    pipeline.del(`${Cache.MEETINGUID_KEY}:${roomDateKey}`);
     await pipeline.exec();
   }
 

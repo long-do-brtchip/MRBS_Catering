@@ -141,10 +141,12 @@ export class CalendarManager implements ICalendarNotification {
         return ErrorCode.ERROR_ACCESS_DENIED;
       }
     }
-    if (id < moment().add(1, "minutes").valueOf()) {
-      // Meeting hasn't started, should be cancelled
+    if (id > moment().add(-1, "minutes").valueOf()) {
+      log.silly(`${room}'s meeting ${moment(id).calendar()} hasn't started ` +
+        "yet, cancel the meeting instead");
       return this.calendar.cancelMeeting(room, id, email);
     } else {
+      log.silly(`End ${room}'s meeting ${moment(id).calendar()}`);
       return this.calendar.endMeeting(room, id, email);
     }
   }
@@ -215,6 +217,12 @@ export class CalendarManager implements ICalendarNotification {
     // Start time no change
     if (!this.event) {
       return;
+    }
+    const end = await this.cache.getTimelineEntryEndTime(room, entry.start);
+    if (end !== undefined) {
+      if (entry.end > end) {
+        entry.end = end;
+      }
     }
     if (entry.end < entry.start) {
       log.debug("meeting ends before started");

@@ -2,6 +2,7 @@ import moment = require("moment");
 import ref = require("ref");
 import StructType = require("ref-struct");
 import {IMeetingInfo, ITimelineEntry} from "./calendar";
+import {log} from "./log";
 import {IHubConfig, IPanlConfig} from "./persist";
 
 interface ITimePoint {
@@ -324,6 +325,7 @@ export class MessageBuilder {
   }
 
   public static buildErrorCode(id: ErrorCode): Buffer {
+    log.silly(`Build errorcode ${id.toString(16)}: ${ErrorCode[id]}`);
     return new StructSetErrorCode({
       cmd: Outgoing.SET_ERROR_CODE,
       id,

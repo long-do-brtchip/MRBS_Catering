@@ -82,12 +82,12 @@ const rooms: IFakeRoom[] = [
       "passcode@ftdichip.com", "fred@ftdichip.com", "rfid@ftdichip.com",
     ],
   } , {
-    timeline: {start: at("2018-01-09 09:30"), end: at("2018-01-09 10:00")},
+    timeline: {start: at("2018-01-09 09:30"), end: at("2018-01-09 14:00")},
     recurring: Recurring.None,
     subject: "ID Design",
     attendees: ["rfid@ftdichip.com", "fred@ftdichip.com"],
   } , {
-    timeline: {start: at("2018-01-10 09:30"), end: at("2018-01-10 10:00")},
+    timeline: {start: at("2018-01-10 05:30"), end: at("2018-01-10 23:00")},
     recurring: Recurring.None,
     subject: "Hardware Design",
     attendees: [
@@ -99,7 +99,7 @@ const rooms: IFakeRoom[] = [
   room: utRoom,
   name: "Unit Test",
   meetings: [{
-    timeline: {start: at("2018-01-08 08:30"), end: at("2018-01-08 10:00")},
+    timeline: {start: at("2018-01-08 08:30"), end: at("2018-01-08 14:30")},
     recurring: Recurring.Weekly,
     subject: "PanL software development weekly meeting",
     attendees: [
@@ -167,10 +167,14 @@ export class MockupCalendar implements ICalendar {
         continue;
       }
       entries.push(entry);
-      await this.cache.setMeetingInfo(room, entry.start, {
-        subject: meeting.subject,
-        organizer: await Auth.getEmployeeName(meeting.attendees[0]),
-      });
+      await Promise.all([
+        this.cache.setMeetingUid(room, entry.start,
+          meeting.attendees.join(" ")),
+        this.cache.setMeetingInfo(room, entry.start, {
+          subject: meeting.subject,
+          organizer: await Auth.getEmployeeName(meeting.attendees[0]),
+        }),
+      ]);
     }
     return entries;
   }
@@ -178,11 +182,14 @@ export class MockupCalendar implements ICalendar {
   public async createBooking(room: string, entry: ITimelineEntry,
                              email: string): Promise<ErrorCode> {
     const organizer = email ? await Auth.getEmployeeName(email) : "PanL";
-    await this.cache.setMeetingInfo(room, entry.start, {
-      subject: this.configHub.meetingSubject,
-      organizer,
-    });
-    await this.notify.onAddNotification(room, entry);
+    await Promise.all([
+      this.cache.setMeetingInfo(room, entry.start, {
+        subject: this.configHub.meetingSubject,
+        organizer,
+      }),
+      this.cache.setMeetingUid(room, entry.start, email),
+    ]);
+    this.notify.onAddNotification(room, entry);
     return ErrorCode.ERROR_SUCCESS;
   }
 
@@ -197,7 +204,7 @@ export class MockupCalendar implements ICalendar {
       info.subject = `Extended: ${info.subject}`;
     }
     await this.cache.setMeetingInfo(room, entry.start, info);
-    await this.notify.onEndTimeChangeNotification(room, entry);
+    this.notify.onEndTimeChangeNotification(room, entry);
     return ErrorCode.ERROR_SUCCESS;
   }
 
@@ -215,13 +222,13 @@ export class MockupCalendar implements ICalendar {
       info.subject = `Ended: ${info.subject}`;
     }
     await this.cache.setMeetingInfo(room, id, info);
-    await this.notify.onEndTimeChangeNotification(room, entry);
+    this.notify.onEndTimeChangeNotification(room, entry);
     return ErrorCode.ERROR_SUCCESS;
   }
 
   public async cancelMeeting(room: string, id: number, email: string):
   Promise<ErrorCode> {
-    await this.notify.onDeleteNotification(room, id);
+    this.notify.onDeleteNotification(room, id);
     return ErrorCode.ERROR_SUCCESS;
   }
 
@@ -232,29 +239,10 @@ export class MockupCalendar implements ICalendar {
 
   public async isAttendeeInMeeting(room: string, id: number, email: string):
   Promise<boolean> {
-    const meetings = MockupCalendar.getMeetings(room);
-    if (!meetings) {
-      return false;
-    }
-    for (const meeting of meetings) {
-      switch (meeting.recurring) {
-      case Recurring.None:
-        if (meeting.timeline.start !== id) {
-          continue;
-        }
-      case Recurring.Weekly:
-        const query = moment(id);
-        const entryStart = moment(meeting.timeline.start);
-        if (query.weekday() !== entryStart.weekday()) {
-          continue;
-        }
-        if (query.format("HHmmss") !== entryStart.format("HHmmss")) {
-          continue;
-        }
-      }
-      return -1 !== meeting.attendees.indexOf(email);
-    }
-    return false;
+    const emails: string[] =
+      (await this.cache.getMeetingUid(room, id)).split(" ");
+    log.silly(`emails: ${emails} compare ${email}`);
+    return -1 !== emails.indexOf(email);
   }
 
   private async addFakeAuthDatas() {
