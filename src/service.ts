@@ -50,9 +50,7 @@ export class PanLService implements IAgentEvent, IPanLEvent, ICalendarEvent {
   public async stop(): Promise<void> {
     clearTimeout(this.newDayJob);
     await this.transport.stop();
-    // wait async task to finish
     await this.cal.disconnect();
-    await new Promise((resolve) => setTimeout(resolve, 10));
   }
 
   // Agent events

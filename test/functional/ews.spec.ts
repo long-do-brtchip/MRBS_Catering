@@ -250,7 +250,7 @@ describe("EWS module", () => {
 
         await new Promise((resolve, reject) => {
           const timeout = setTimeout(() => {
-            reject("add event timeout");
+            reject(new Error("add event timeout"));
           }, 8000);
 
           evt.on("add",
@@ -289,7 +289,7 @@ describe("EWS module", () => {
 
         await new Promise((resolve, reject) => {
           const timeout = setTimeout(() => {
-            reject("onUpdate meeting's subject event timeout");
+            reject(new Error("onUpdate meeting's subject event timeout"));
           }, 8000);
 
           evt.on("update", async (path2: PanLPath, id: number) => {
@@ -301,7 +301,7 @@ describe("EWS module", () => {
                 if (meetingSubject === newSubject) {
                   resolve();
                 } else {
-                  reject("meeting subject not matching");
+                  reject(new Error("meeting subject not matching"));
                 }
               } catch (error) {
                 reject(error);
@@ -332,7 +332,7 @@ describe("EWS module", () => {
         await ews.extendMeeting(roomAddress, entryExtend, email);
         await new Promise((resolve, reject) => {
           const timeout = setTimeout(() => {
-            reject("endTimeChange event timeout");
+            reject(new Error("endTimeChange event timeout"));
           }, 8000);
 
           evt.on("endTimeChange",
@@ -345,7 +345,9 @@ describe("EWS module", () => {
                 if (end === entryExtend.end) {
                   resolve();
                 } else {
-                  reject("endTimeChange not matching");
+                  reject(new Error(`endTimeChange ${moment(end).calendar()} ` +
+                    "doesn't match expected " +
+                    moment(entryExtend.end).calendar()));
                 }
               } catch (error) {
                 reject(error);
@@ -377,7 +379,7 @@ describe("EWS module", () => {
 
         await new Promise((resolve, reject) => {
           const timeout = setTimeout(() => {
-            reject("update meeting's StartTime event timeout");
+            reject(new Error("update meeting's StartTime event timeout"));
           }, 8000);
 
           evt.on("delete",
@@ -390,7 +392,7 @@ describe("EWS module", () => {
                 if (!endTime) {
                   resolve();
                 } else {
-                  reject("Update StartTime can not remove old one");
+                  reject(new Error("Update StartTime can not remove old one"));
                 }
               } catch (error) {
                 reject(error);
@@ -401,7 +403,7 @@ describe("EWS module", () => {
 
         await new Promise((resolve, reject) => {
           const timeout = setTimeout(() => {
-            reject("update meeting's StartTime event timeout");
+            reject(new Error("update meeting's StartTime event timeout"));
           }, 2000);
 
           evt.on("add",
@@ -414,7 +416,7 @@ describe("EWS module", () => {
                 if (endTime === entry2.end) {
                   resolve();
                 } else {
-                  reject("Update StartTime add new one");
+                  reject(new Error("Update StartTime add new one"));
                 }
               } catch (error) {
                 reject(error);
@@ -442,7 +444,7 @@ describe("EWS module", () => {
 
         await new Promise((resolve, reject) => {
           const timeout = setTimeout(() => {
-            reject("Cancel meeting's event timeout");
+            reject(new Error("Cancel meeting's event timeout"));
           }, 8000);
 
           evt.on("delete",
@@ -455,7 +457,7 @@ describe("EWS module", () => {
                 if (!endTime) {
                   resolve();
                 } else {
-                  reject("Cancel can not remove old");
+                  reject(new Error("Cancel can not remove old"));
                 }
               } catch (error) {
                 reject(error);

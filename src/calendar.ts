@@ -310,5 +310,6 @@ export class CalendarManager implements ICalendarNotification {
     }
     this.isConnected = false;
     delete this.calendar;
+    await new Promise((resolve) => setTimeout(resolve, 10));
   }
 }
