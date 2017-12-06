@@ -121,81 +121,24 @@ export class EWSCalendar implements ICalendar, IRoomStatusChange {
 
   public async extendMeeting(room: string, entry: ITimelineEntry,
                              email: string): Promise<ErrorCode> {
-    this.impersonationSupport(room);
-    try {
-      let apptId;
-      try {
-        apptId = new ItemId(await this.cache.getMeetingUid(room, entry.start));
-      } catch (err) {
-        return ErrorCode.ERROR_CACHE_MEETINGID_NOT_FOUND;
-      }
-      const appointment = await Appointment.Bind(this.service, apptId);
-      appointment.End = new DateTime(entry.end);
-
-      // Unless explicitly specified, the default is to use SendToAllAndSave..
-      // This can convert an appointment into a meeting. To avoid this,
-      // explicitly set SendToNone on non-meetings.
-      const mode = appointment.IsMeeting ?
-        SendInvitationsOrCancellationsMode.SendToAllAndSaveCopy
-        : SendInvitationsOrCancellationsMode.SendToNone;
-
-      // Send the update request to the Exchange server.
-      await appointment.Update(ConflictResolutionMode.AlwaysOverwrite, mode);
-      return ErrorCode.ERROR_SUCCESS;
-    } catch (error) {
-      log.info("EWSCalendar.extendMeeting()::", error.message);
-      return EWSCalendar.parseEWSErrorCode(error.ErrorCode);
-    }
+    return this.updateAppointment(room, entry.start, (appt) => {
+      appt.End = new DateTime(entry.end);
+    });
   }
 
   public async endMeeting(room: string, id: number, email: string):
   Promise<ErrorCode> {
-    this.impersonationSupport(room);
-    try {
-      let apptId;
-      try {
-        apptId = new ItemId(await this.cache.getMeetingUid(room, id));
-      } catch (err) {
-        return ErrorCode.ERROR_CACHE_MEETINGID_NOT_FOUND;
-      }
-      const appointment = await Appointment.Bind(this.service, apptId);
-
-      appointment.End = DateTime.Now;
-      // Unless explicitly specified, the default is to use SendToAllAndSave..
-      // This can convert an appointment into a meeting. To avoid this,
-      // explicitly set SendToNone on non-meetings.
-      const mode = appointment.IsMeeting ?
-        SendInvitationsOrCancellationsMode.SendToAllAndSaveCopy
-        : SendInvitationsOrCancellationsMode.SendToNone;
-
-      // Send the update request to the Exchange server.
-      await appointment.Update(ConflictResolutionMode.AlwaysOverwrite, mode);
-      return ErrorCode.ERROR_SUCCESS;
-    } catch (error) {
-      log.info("EWSCalendar.endMeeting()::", error.message);
-      return EWSCalendar.parseEWSErrorCode(error.ErrorCode);
-    }
+    return this.updateAppointment(room, id, (appt) => {
+      const now = DateTime.Now;
+      appt.End = now < appt.Start ? appt.Start : now;
+    });
   }
 
   public async cancelMeeting(room: string, id: number, email: string):
   Promise<ErrorCode> {
-    this.impersonationSupport(room);
-    try {
-      let apptId;
-      try {
-        apptId = new ItemId(await this.cache.getMeetingUid(room, id));
-      } catch (err) {
-        return ErrorCode.ERROR_CACHE_MEETINGID_NOT_FOUND;
-      }
-      const meeting = await Appointment.Bind(this.service, apptId);
-
-      // Delete the meeting by using the CancelMeeting method.
-      await meeting.CancelMeeting();
-      return ErrorCode.ERROR_SUCCESS;
-    } catch (error) {
-      log.info("EWSCalendar.cancelMeeting()::", error.message);
-      return EWSCalendar.parseEWSErrorCode(error.ErrorCode);
-    }
+    return this.modifyAppointment(room, id, async (appt) => {
+      await appt.CancelMeeting();
+    });
   }
 
   public async cancelUnclaimedMeeting(room: string, id: number):
@@ -256,6 +199,55 @@ export class EWSCalendar implements ICalendar, IRoomStatusChange {
     }
   }
 
+  public async addAttendee(room: string, id: number, attendeeAddress: string):
+  Promise<ErrorCode> {
+    return this.updateAppointment(room, id,
+      (appt) => appt.RequiredAttendees.Add(attendeeAddress));
+  }
+
+  public async updateSubject(room: string, id: number, subject: string):
+  Promise<ErrorCode> {
+    return this.updateAppointment(room, id, (appt) => appt.Subject = subject);
+  }
+
+  public async updateStartTime(room: string, id: number, time: number):
+  Promise<ErrorCode> {
+    return this.updateAppointment(room, id,
+      (appt) => appt.Start = new DateTime(time));
+  }
+
+  private async modifyAppointment(room: string, id: number,
+                                  cb: (appt: Appointment) => Promise<void>):
+  Promise<ErrorCode> {
+    this.impersonationSupport(room);
+    try {
+      let apptId;
+      try {
+        apptId = new ItemId(await this.cache.getMeetingUid(room, id));
+      } catch (err) {
+        return ErrorCode.ERROR_CACHE_MEETINGID_NOT_FOUND;
+      }
+      const appt = await Appointment.Bind(this.service, apptId);
+      await cb(appt);
+      return ErrorCode.ERROR_SUCCESS;
+    } catch (error) {
+      log.info("EWS::modifyAppointment() error:", error.message);
+      return EWSCalendar.parseEWSErrorCode(error.ErrorCode);
+    }
+  }
+
+  private async updateAppointment(room: string, id: number,
+                                  cb: (appt: Appointment) => void):
+  Promise<ErrorCode> {
+    return this.modifyAppointment(room, id, async (appt) => {
+      const mode = appt.IsMeeting ?
+        SendInvitationsOrCancellationsMode.SendToAllAndSaveCopy :
+        SendInvitationsOrCancellationsMode.SendToNone;
+      cb(appt);
+      await appt.Update(ConflictResolutionMode.AlwaysOverwrite, mode);
+    });
+  }
+
   private async handleNotification(room: string, uid: string, type: EventType):
   Promise<void> {
     let appt;
@@ -265,7 +257,6 @@ export class EWSCalendar implements ICalendar, IRoomStatusChange {
       if (err.ErrorCode === 249) {
         const start = await this.cache.getMeetingStartFromUid(room, uid);
         this.notify.onDelete(room, start);
-        log.silly("[notify] meeting deleted");
       }
       return;
     }
@@ -290,7 +281,6 @@ export class EWSCalendar implements ICalendar, IRoomStatusChange {
         this.cache.setMeetingUid(room, entry.start, uid),
       ]);
       this.notify.onAdd(room, entry);
-      log.silly("[notify] new meeting");
     } else if (type === EventType.Modified) {
       const start = await this.cache.getMeetingStartFromUid(room, uid);
       if (start === 0) {
@@ -324,9 +314,8 @@ export class EWSCalendar implements ICalendar, IRoomStatusChange {
     const folderId: FolderId[] = [new FolderId(
       WellKnownFolderName.Calendar, new Mailbox(room))];
     const stream = await this.service.SubscribeToStreamingNotifications(
-      folderId,
-      EventType.Created,
-      EventType.Modified);
+      folderId, EventType.Created, EventType.Modified, EventType.Deleted,
+      EventType.Moved);
 
     // Subscribe to streaming notifications in the Inbox.
     const sub = new StreamingSubscriptionConnection(this.service, 1);
@@ -375,8 +364,8 @@ export class EWSCalendar implements ICalendar, IRoomStatusChange {
       if (tmpSet.has(event.ItemId.UniqueId)) {
         continue;
       }
-      log.silly("EWS response:",
-        notification.EventType, event.ItemId.UniqueId);
+      log.silly("EWS notification:", EventType[notification.EventType],
+        "UID:", event.ItemId.UniqueId);
       tmpSet.add(event.ItemId.UniqueId);
       try {
         ews.handleNotification(room, event.ItemId.UniqueId,

@@ -1,6 +1,7 @@
 import {Logger, LoggerInstance, transports} from "winston";
 
 export let log: LoggerInstance;
+const ts = () => (new Date()).toLocaleTimeString();
 
 switch (process.env.NODE_ENV) {
   case "production":
@@ -10,12 +11,11 @@ switch (process.env.NODE_ENV) {
     log = new Logger({
       level: "error",
       transports: [
-        new transports.Console({colorize: true}),
+        new transports.Console({colorize: true, timestamp: ts}),
       ],
     });
     break;
   default:
-    const ts = () => (new Date()).toLocaleTimeString();
     log = new Logger({
       level: "silly",
       transports: [

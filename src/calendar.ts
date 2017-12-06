@@ -208,12 +208,6 @@ export class CalendarManager implements ICalendarEvent<string> {
     if (!this.event) {
       return;
     }
-    const end = await this.cache.getTimelineEntryEndTime(room, entry.start);
-    if (end !== undefined) {
-      if (entry.end > end) {
-        entry.end = end;
-      }
-    }
     if (entry.end < entry.start) {
       log.debug("meeting ends before started");
       entry.end = entry.start;
