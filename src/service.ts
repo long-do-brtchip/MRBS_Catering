@@ -17,12 +17,11 @@ export class PanLService implements IAgentEvent, IPanLEvent, ICalendarEvent {
   Promise<[PanLService, () => Promise<void>]> {
     const db = await Database.getInstance();
     const cache = await Cache.getInstance();
-    const cal = new CalendarManager(cache,
-      await Persist.getHubConfig(),
-      await Persist.getPanlConfig(),
-    );
+    const panlCfg = await Persist.getPanlConfig();
+    const hubCfg = await Persist.getHubConfig();
+    const cal = new CalendarManager(cache, hubCfg, panlCfg);
     const transport = new TcpSocket(0xF7D1);
-    const service = new PanLService(cache, cal, transport);
+    const service = new PanLService(cache, cal, transport, panlCfg);
     await service.start();
 
     return [service, async () => {
@@ -37,7 +36,8 @@ export class PanLService implements IAgentEvent, IPanLEvent, ICalendarEvent {
 
   public constructor(private cache: Cache,
                      private cal: CalendarManager,
-                     private transport: IMessageTransport) {
+                     private transport: IMessageTransport,
+                     private panlCfg: IPanlConfig) {
     this.tx = new Transmit(this.transport);
     this.setupNewDayTask();
   }
@@ -58,9 +58,9 @@ export class PanLService implements IAgentEvent, IPanLEvent, ICalendarEvent {
     const msgs = [
       MessageBuilder.buildExpectedFirmwareVersion(),
       MessageBuilder.buildUUID(),
-      MessageBuilder.buildLangID(),
-      MessageBuilder.buildTimeFormat(),
-      MessageBuilder.buildAccessRight(await Persist.getPanlConfig()),
+      MessageBuilder.buildLangID(this.panlCfg.language),
+      MessageBuilder.buildTimeFormat(this.panlCfg.militaryTimeFormat),
+      MessageBuilder.buildAccessRight(this.panlCfg),
       // Build SetTime at last to minimize the latency
       MessageBuilder.buildTime(),
     ];

@@ -138,6 +138,9 @@ export class MessageParser {
         case Incoming.SET_ADDRESS:
           [buf, next] = await this.waitBuf(next, 1);
           this.path = new PanLPath(this.id, buf[0]);
+          if (buf[0] === 255) {
+            throw(new Error("Invalid SET_ADDRESS 255"));
+          }
           break;
         case Incoming.REPORT_UUID:
           [buf, next] = await this.waitBuf(next, 8);

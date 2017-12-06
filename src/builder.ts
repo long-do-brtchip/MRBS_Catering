@@ -3,7 +3,7 @@ import ref = require("ref");
 import StructType = require("ref-struct");
 import {IMeetingInfo, ITimelineEntry} from "./calendar";
 import {log} from "./log";
-import {IHubConfig, IPanlConfig} from "./persist";
+import {IHubConfig, IPanlConfig, LANG_ID} from "./persist";
 
 interface ITimePoint {
   dayOffset: number;
@@ -54,13 +54,6 @@ enum Outgoing {
   SET_ERROR_CODE,
   GET_UUID,
   SET_UNCONFIGURED_ID,
-}
-
-enum LANG_ID {
-  EN,
-  CN,
-  JP,
-  KR,
 }
 
 const StructSetAddress = StructType({
@@ -210,32 +203,30 @@ export class MessageBuilder {
 
   public static buildRoomName(name: string): Buffer[] {
     const utf8 = Buffer.from(name);
-    return [new StructSetRoomNameHdr({
-        cmd: Outgoing.SET_ROOM_NAME,
-        len: utf8.byteLength,
-      }).ref(),
+    const len = utf8.byteLength > 255 ? 255 : utf8.byteLength;
+    return [new StructSetRoomNameHdr({cmd: Outgoing.SET_ROOM_NAME, len}).ref(),
       utf8];
   }
 
   public static buildExpectedFirmwareVersion(): Buffer {
     return new StructFirmwareVersion({
       cmd: Outgoing.SET_EXPECTED_FIRMWARE_VERSION,
-      major: 1,
+      major: 0,
       minor: 1,
     }).ref();
   }
 
-  public static buildTimeFormat(): Buffer {
+  public static buildTimeFormat(militaryFormat: boolean): Buffer {
     return new StructSetTimeFormat({
       cmd: Outgoing.SET_TIME_FORMAT,
-      militaryFormat: false,
+      militaryFormat,
     }).ref();
   }
 
-  public static buildLangID(): Buffer {
+  public static buildLangID(lang: LANG_ID): Buffer {
     return new StructSetLang({
       cmd: Outgoing.SET_LANGID,
-      lang: LANG_ID.EN,
+      lang,
     }).ref();
   }
 
@@ -243,6 +234,9 @@ export class MessageBuilder {
     const date = new Date();
     const YEAR_OFFSET: number = 2017;
     const year: number = date.getFullYear() - YEAR_OFFSET;
+    if (year > 2080) {
+      throw(new Error("Year beyond 2080 is not supported"));
+    }
     const month: number  = date.getMonth();
     const day: number = date.getDate();
     const seconds: number = date.getSeconds() +
@@ -298,11 +292,14 @@ export class MessageBuilder {
   public static buildMeetingInfo(info: IMeetingInfo): Buffer[] {
     const subject = Buffer.from(info.subject);
     const organizer = Buffer.from(info.organizer);
+    const subjectLen = subject.byteLength > 255 ? 255 : subject.byteLength;
+    const organizerLen =
+      organizer.byteLength > 255 ? 255 : organizer.byteLength;
 
     return [new StructSetMeetingInfoHdr({
         cmd: Outgoing.SET_MEETING_INFO,
-        subjectLen: subject.byteLength,
-        organizerLen: organizer.byteLength,
+        subjectLen,
+        organizerLen,
       }).ref(),
       subject, organizer];
   }
@@ -343,11 +340,15 @@ export class MessageBuilder {
 
   private static buildDuration(cmd: Outgoing, entry: ITimelineEntry): Buffer {
     const tp = MessageBuilder.epochToOffset(entry.start);
+    let duration = moment(entry.end).diff(moment(entry.start), "minutes");
+    if (duration > 65535) {
+      duration = 65535;
+    }
     return new StructDuration({
       cmd,
       dayOffset: tp.dayOffset,
       minutesOfDay: tp.minutesOfDay,
-      duration: moment(entry.end).diff(moment(entry.start), "minutes"),
+      duration,
     }).ref();
   }
 
@@ -375,13 +376,17 @@ export class MessageBuilder {
   private static epochToOffset(id: number): ITimePoint {
     const ts = moment(id);
     const now = moment();
+    const dayOffset = ts.startOf("day").diff(now.startOf("day"), "days");
+    if (dayOffset < -128 || dayOffset > 127) {
+      throw(new Error("Invalid dayOffset " + dayOffset));
+    }
     let minutesOfDay = ts.diff(ts.clone().startOf("day"), "minutes");
+    if (minutesOfDay >= 24 * 60) {
+      throw(new Error(`minutesOfDay ${minutesOfDay} not within today`));
+    }
     if (Number(now.format("HH")) >= 12) {
       minutesOfDay |= 1 << 11;
     }
-    return {
-      dayOffset: ts.startOf("day").diff(now.startOf("day"), "days"),
-      minutesOfDay,
-    };
+    return {dayOffset, minutesOfDay};
   }
 }

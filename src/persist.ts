@@ -19,6 +19,13 @@ export enum AddressFamily {
   IPv6,
 }
 
+export enum LANG_ID {
+  EN,
+  CN,
+  JP,
+  KR,
+}
+
 export interface ICalendarConfig {
   type: CalendarType;
   address: string;
@@ -43,6 +50,8 @@ export interface IHubConfig {
 
 export interface IPanlConfig {
   timeout: number;
+  militaryTimeFormat: boolean;
+  language: LANG_ID;
   featureDisabled: IMeetingControlUnit;
   authAllowPasscode: IMeetingControlUnit;
   authAllowRFID: IMeetingControlUnit;
@@ -124,6 +133,8 @@ export class Persist {
   public static async getPanlConfig(): Promise<IPanlConfig> {
     return Persist.getConfig<IPanlConfig>(ConfigType.PANL_CONFIG, {
       timeout: 10,
+      militaryTimeFormat: false,
+      language: LANG_ID.EN,
       featureDisabled: {
         extendMeeting: false,
         claimMeeting: false,
