@@ -125,15 +125,17 @@ export class MessageParser {
       // Parse payload
       switch (buf[0]) {
         case Incoming.REQUEST_FIRMWARE:
-          await this.panlEvt.onRequestFirmware(this.path);
+          this.panlEvt.onRequestFirmware(this.path);
           break;
         case Incoming.AUTH_BY_PASSCODE:
           [buf, next] = await this.waitBuf(next, StructAuthByPasscode.size);
+          // Justify for await: next action requires the authentication result
           await this.panlEvt.onPasscode(this.path,
             StructAuthByPasscode(buf).passcode);
           break;
         case Incoming.AUTH_BY_RFID:
           [buf, next] = await this.waitBuf(next, StructAuthByRFID.size);
+          // Justify for await: next action requires the authentication result
           await this.panlEvt.onRFID(this.path, buf);
         case Incoming.SET_ADDRESS:
           [buf, next] = await this.waitBuf(next, 1);
@@ -147,11 +149,12 @@ export class MessageParser {
           this.panlEvt.onReportUUID(this.path, buf);
           break;
         case Incoming.REPORT_DEVICE_CHANGE:
+          // Justify for await: room, panl information will be purged from cache
           await this.agentEvt.onDeviceChange(this.id);
           break;
         case Incoming.REPORT_PANL_STATUS:
           [buf, next] = await this.waitBuf(next, 1);
-          await this.panlEvt.onStatus(this.path, buf[0]);
+          this.panlEvt.onStatus(this.path, buf[0]);
           break;
         case Incoming.GET_LOCAL_TIME:
           this.panlEvt.onGetTime(this.path);
@@ -165,6 +168,7 @@ export class MessageParser {
             lookForward,
             maxCount: tl.count,
           };
+          // Justify for await: next GET_MEETING_INFO requires cached data
           await this.panlEvt.onGetTimeline(this.path, req);
           break;
         }
@@ -183,7 +187,7 @@ export class MessageParser {
           const span = StructTimespan(buf);
           const start = MessageParser.getEpochTime(span.point);
           const end = start + span.duration * 60 * 1000;
-          await this.panlEvt.onExtendMeeting(this.path, {start, end});
+          this.panlEvt.onExtendMeeting(this.path, {start, end});
           break;
         }
         case Incoming.CREATE_BOOKING: {
@@ -191,30 +195,30 @@ export class MessageParser {
           const span = StructTimespan(buf);
           const start = MessageParser.getEpochTime(span.point);
           const end = start + span.duration * 60 * 1000;
-          await this.panlEvt.onCreateBooking(this.path, {start, end});
+          this.panlEvt.onCreateBooking(this.path, {start, end});
           break;
         }
         case Incoming.CANCEL_MEETING: {
           [buf, next] = await this.waitBuf(next, StructTimepoint.size);
-          await this.panlEvt.onCancelMeeting(this.path,
+          this.panlEvt.onCancelMeeting(this.path,
             MessageParser.getEpochTime(buf));
           break;
         }
         case Incoming.END_MEETING: {
           [buf, next] = await this.waitBuf(next, StructTimepoint.size);
-          await this.panlEvt.onEndMeeting(this.path,
+          this.panlEvt.onEndMeeting(this.path,
             MessageParser.getEpochTime(buf));
           break;
         }
         case Incoming.CANCEL_UNCLAIM_MEETING: {
           [buf, next] = await this.waitBuf(next, StructTimepoint.size);
-          await this.panlEvt.onCancelUnclaimedMeeting(this.path,
+          this.panlEvt.onCancelUnclaimedMeeting(this.path,
             MessageParser.getEpochTime(buf));
           break;
         }
         case Incoming.CHECK_CLAIM_MEETING: {
           [buf, next] = await this.waitBuf(next, StructTimepoint.size);
-          await this.panlEvt.onCheckClaimMeeting(this.path,
+          this.panlEvt.onCheckClaimMeeting(this.path,
             MessageParser.getEpochTime(buf));
           break;
         }
@@ -237,7 +241,7 @@ export class MessageParser {
     if (buf) {
       return buf;
     }
-    throw(new Error("!!!FIX ME!!! MessageParser in wrong state"));
+    throw(new Error("!!!FIX ME!!! MessageParser is in wrong state"));
   }
 
   private kickWaitingTask() {
