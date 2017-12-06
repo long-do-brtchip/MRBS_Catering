@@ -50,7 +50,7 @@ class CalendarEventConsumer implements ICalendarEvent {
   }
 }
 
-describe("EWS module", () => {
+describe.skip("EWS module", () => {
   let cal: CalendarManager;
   let ews: EWSCalendar;
   let cache: Cache;
