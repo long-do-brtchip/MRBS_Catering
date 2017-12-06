@@ -243,9 +243,6 @@ describe.skip("EWS module", () => {
         await ews.cancelMeeting(roomAddress, entries[0].start, email);
         // remove timeline and meeting but remain shadow_key
         await cache.removeTimelineEntry(roomAddress, entries[0].start);
-
-        // open stream notification
-        await ews.onRoomOnline(roomAddress);
         await ews.createBooking(roomAddress, entry, email);
 
         await new Promise((resolve, reject) => {
@@ -266,8 +263,6 @@ describe.skip("EWS module", () => {
               clearTimeout(timeout);
             });
         });
-
-        await ews.onRoomOffline(roomAddress);
       }).timeout(100000);
 
     it("should able received update subject notification",
@@ -281,8 +276,6 @@ describe.skip("EWS module", () => {
         };
         const entries = await cal.getTimeline(path, req);
         const entry = entries[0];
-        // open stream notification
-        await ews.onRoomOnline(roomAddress);
         // manual update
         await updateSubject(roomAddress,
           await cache.getMeetingUid(roomAddress, entry.start), newSubject);
@@ -309,8 +302,6 @@ describe.skip("EWS module", () => {
               clearTimeout(timeout);
             });
         });
-
-        await ews.onRoomOffline(roomAddress);
       }).timeout(100000);
 
     it("should able received update endTime notification",
@@ -326,8 +317,6 @@ describe.skip("EWS module", () => {
           start: entries[0].start,
           end: entries[0].end + 1800000, // extend 30M
         };
-        // open stream notification
-        await ews.onRoomOnline(roomAddress);
         // manual update
         await ews.extendMeeting(roomAddress, entryExtend, email);
         await new Promise((resolve, reject) => {
@@ -356,7 +345,6 @@ describe.skip("EWS module", () => {
             });
         });
 
-        await ews.onRoomOffline(roomAddress);
       }).timeout(100000);
 
     it("should able received update startTime notification",
@@ -372,7 +360,6 @@ describe.skip("EWS module", () => {
         const startExtend = start + 900000; // extend 15p
 
         // open stream notification
-        await ews.onRoomOnline(roomAddress);
         // manual update
         await updateStartTime(roomAddress,
           await cache.getMeetingUid(roomAddress, start), startExtend);
@@ -424,8 +411,6 @@ describe.skip("EWS module", () => {
               clearTimeout(timeout);
             });
         });
-
-        await ews.onRoomOffline(roomAddress);
       }).timeout(11000);
 
     it("should able received cancel meeting notification",
@@ -439,7 +424,6 @@ describe.skip("EWS module", () => {
         const entries = await cal.getTimeline(path, req);
         const entry = entries[0];
         // open stream notification
-        await ews.onRoomOnline(roomAddress);
         await ews.cancelMeeting(roomAddress, entry.start, email);
 
         await new Promise((resolve, reject) => {
@@ -465,7 +449,6 @@ describe.skip("EWS module", () => {
               clearTimeout(timeout);
             });
         });
-        await ews.onRoomOffline(roomAddress);
       }).timeout(100000);
   });
 });

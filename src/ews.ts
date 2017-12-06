@@ -58,6 +58,10 @@ export class EWSCalendar implements ICalendar, IRoomStatusChange {
     this.service.Url = new Uri(config.address);
   }
 
+  public async init(): Promise<void> {
+    await this.cache.subscribeRoomStatusChange(this);
+  }
+
   public async getTimeline(room: string, id: number):
   Promise<ITimelineEntry[]> {
     const result: ITimelineEntry[] = [];
@@ -111,7 +115,7 @@ export class EWSCalendar implements ICalendar, IRoomStatusChange {
       await appointment.Save(SendInvitationsMode.SendToNone);
       return ErrorCode.ERROR_SUCCESS;
     } catch (error) {
-      log.error("EWSCalendar.createBooking()::", error.message);
+      log.info("EWSCalendar.createBooking()::", error.message);
       return EWSCalendar.parseEWSErrorCode(error.ErrorCode);
     }
   }
@@ -140,7 +144,7 @@ export class EWSCalendar implements ICalendar, IRoomStatusChange {
       await appointment.Update(ConflictResolutionMode.AlwaysOverwrite, mode);
       return ErrorCode.ERROR_SUCCESS;
     } catch (error) {
-      log.error("EWSCalendar.extendMeeting()::", error.message);
+      log.info("EWSCalendar.extendMeeting()::", error.message);
       return EWSCalendar.parseEWSErrorCode(error.ErrorCode);
     }
   }
@@ -169,7 +173,7 @@ export class EWSCalendar implements ICalendar, IRoomStatusChange {
       await appointment.Update(ConflictResolutionMode.AlwaysOverwrite, mode);
       return ErrorCode.ERROR_SUCCESS;
     } catch (error) {
-      log.error("EWSCalendar.endMeeting()::", error.message);
+      log.info("EWSCalendar.endMeeting()::", error.message);
       return EWSCalendar.parseEWSErrorCode(error.ErrorCode);
     }
   }
@@ -190,7 +194,7 @@ export class EWSCalendar implements ICalendar, IRoomStatusChange {
       await meeting.CancelMeeting();
       return ErrorCode.ERROR_SUCCESS;
     } catch (error) {
-      log.error("EWSCalendar.cancelMeeting()::", error.message);
+      log.info("EWSCalendar.cancelMeeting()::", error.message);
       return EWSCalendar.parseEWSErrorCode(error.ErrorCode);
     }
   }
@@ -225,7 +229,7 @@ export class EWSCalendar implements ICalendar, IRoomStatusChange {
           }
         }
       } catch (error) {
-        log.debug("EWSCalendar.isAttendeeInMeeting()::", error.message);
+        log.info("EWSCalendar.isAttendeeInMeeting()::", error.message);
       }
     }
 
@@ -234,12 +238,10 @@ export class EWSCalendar implements ICalendar, IRoomStatusChange {
 
   public async disconnect(): Promise<void> {
     this.stopped = true;
+    this.cache.unsubscribeRoomStatusChange(this);
     for (const sub of this.subMap.values()) {
-      if (sub) {
-        sub.Close();
-      }
+      sub.Close();
     }
-    // clear map
     this.subMap.clear();
   }
 
@@ -264,7 +266,7 @@ export class EWSCalendar implements ICalendar, IRoomStatusChange {
       if (err.ErrorCode === 249) {
         const start = await this.cache.getMeetingStartFromUid(room, uid);
         this.notify.onDeleteNotification(room, start);
-        log.debug("[notify] meeting deleted");
+        log.silly("[notify] meeting deleted");
       }
       return;
     }
@@ -289,7 +291,7 @@ export class EWSCalendar implements ICalendar, IRoomStatusChange {
         this.cache.setMeetingUid(room, entry.start, uid),
       ]);
       this.notify.onAddNotification(room, entry);
-      log.silly("[notify] create new meeting");
+      log.silly("[notify] new meeting");
     } else if (type === EventType.Modified) {
       const start = await this.cache.getMeetingStartFromUid(room, uid);
       if (start === 0) {
@@ -313,11 +315,12 @@ export class EWSCalendar implements ICalendar, IRoomStatusChange {
         await this.notify.onAddNotification(room, entry);
       }
     } else {
-      log.debug("[notify] unhandled notification type:", type);
+      log.verbose("[notify] unhandled notification type:", type);
     }
   }
 
   private async streamNotification(room: string): Promise<void> {
+    log.verbose(`Start EWS StreamSubscription for room ${room}...`);
     const folderId: FolderId[] = [new FolderId(
       WellKnownFolderName.Calendar, new Mailbox(room))];
     const stream = await this.service.SubscribeToStreamingNotifications(
@@ -335,23 +338,23 @@ export class EWSCalendar implements ICalendar, IRoomStatusChange {
     });
     // Error handler
     sub.OnSubscriptionError.push((conn, args) => {
-      log.error("EWS stream notification:::", args.Exception.Message);
+      log.info(`EWS stream notification for room ${room} error`,
+        args.Exception.Message);
     });
     // Auto reconnect
     sub.OnDisconnect.push((conn) => {
       if (!this.stopped && this.subMap.has(room)) {
         conn.Open();
-        log.debug("EWS StreamSubscription re-open: ", room);
+        log.verbose("EWS StreamSubscription re-open: ", room);
       } else {
         this.subMap.delete(room);
-        log.debug("EWS StreamSubscription close: ", room);
+        log.verbose("EWS StreamSubscription close: ", room);
       }
     });
     // Open connected
     if (!this.stopped) {
       sub.Open();
       this.subMap.set(room, sub);
-      log.debug("Start EWS StreamSubscription Event...");
       if (this.stopped) {
         this.subMap.delete(room);
         sub.Close();
@@ -372,7 +375,7 @@ export class EWSCalendar implements ICalendar, IRoomStatusChange {
       if (tmpSet.has(event.ItemId.UniqueId)) {
         continue;
       }
-      log.debug("EWS response:",
+      log.silly("EWS response:",
         notification.EventType, event.ItemId.UniqueId);
       tmpSet.add(event.ItemId.UniqueId);
       try {
