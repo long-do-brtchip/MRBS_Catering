@@ -9,13 +9,14 @@ import {CalendarManager, ITimelineEntry} from "../../src/calendar";
 import {Database} from "../../src/database";
 import {Room} from "../../src/entity/hub/room";
 import {EWSCalendar} from "../../src/ews";
-import {ICalendarEvent} from "../../src/interface";
+import {ICalendarEvent, ICalendarManagerEvent} from "../../src/interface";
 import {log} from "../../src/log";
 import {PanLPath} from "../../src/path";
 import {CalendarType, Persist} from "../../src/persist";
 const startOfDay = moment().startOf("day");
 
-class CalendarEventConsumer implements ICalendarEvent {
+class CalendarEventConsumer implements ICalendarManagerEvent,
+  ICalendarEvent<PanLPath> {
   constructor(private evt: EventEmitter) {
   }
 
@@ -28,23 +29,22 @@ class CalendarEventConsumer implements ICalendarEvent {
     return;
   }
 
-  public async onAdd(path: PanLPath, entry: ITimelineEntry): Promise<void> {
+  public async onAdd(path: PanLPath, entry: ITimelineEntry) {
     this.evt.emit("add", path, entry);
     return;
   }
 
-  public async onDelete(path: PanLPath, id: number): Promise<void> {
+  public async onDelete(path: PanLPath, id: number) {
     this.evt.emit("delete", path, id);
     return;
   }
 
-  public async onUpdate(path: PanLPath, id: number): Promise<void> {
+  public async onMeetingUpdate(path: PanLPath, id: number) {
     this.evt.emit("update", path, id);
     return;
   }
 
-  public async onEndTimeChanged(path: PanLPath, entry: ITimelineEntry):
-  Promise<void> {
+  public async onEndTimeChange(path: PanLPath, entry: ITimelineEntry) {
     this.evt.emit("endTimeChange", path, entry);
     return;
   }
@@ -82,7 +82,7 @@ describe.skip("EWS module", () => {
       await Persist.getPanlConfig());
     ews = new EWSCalendar(cal, cache, await Persist.getCalendarConfig(),
       await Persist.getHubConfig());
-    await cal.connect(consumer);
+    await cal.connect(consumer, consumer);
     await clearMeeting();
   });
 

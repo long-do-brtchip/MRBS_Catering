@@ -27,13 +27,16 @@ export interface IPanLEvent {
   onCheckClaimMeeting(path: PanLPath, id: number): Promise<void>;
 }
 
-export interface ICalendarEvent {
+export interface ICalendarManagerEvent {
   onCalMgrReady(): Promise<void>;
   onCalMgrError(err: Error): Promise<void>;
-  onAdd(path: PanLPath, entry: ITimelineEntry): Promise<void>;
-  onDelete(path: PanLPath, id: number): Promise<void>;
-  onUpdate(path: PanLPath, id: number): Promise<void>;
-  onEndTimeChanged(path: PanLPath, entry: ITimelineEntry): Promise<void>;
+}
+
+export interface ICalendarEvent<T> {
+  onAdd(to: T, entry: ITimelineEntry): Promise<void>;
+  onDelete(to: T, id: number): Promise<void>;
+  onMeetingUpdate(to: T, id: number): Promise<void>;
+  onEndTimeChange(to: T, entry: ITimelineEntry): Promise<void>;
 }
 
 export interface IMessageTransport {

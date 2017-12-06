@@ -10,29 +10,20 @@ import {utQueryTime, utRoom} from "../../src/mockup";
 import {PanLPath} from "../../src/path";
 import {CalendarType, Persist} from "../../src/persist";
 
-class CalendarEventConsumer implements ICalendarEvent {
-  public async onCalMgrReady(): Promise<void> {
+class CalendarEventConsumer implements ICalendarEvent<PanLPath> {
+  public async onAdd(path: PanLPath, entry: ITimelineEntry) {
     return;
   }
 
-  public async onCalMgrError(err: Error): Promise<void> {
+  public async onDelete(path: PanLPath, id: number) {
     return;
   }
 
-  public async onAdd(path: PanLPath, entry: ITimelineEntry): Promise<void> {
+  public async onMeetingUpdate(path: PanLPath, id: number) {
     return;
   }
 
-  public async onDelete(path: PanLPath, id: number): Promise<void> {
-    return;
-  }
-
-  public async onUpdate(path: PanLPath, id: number): Promise<void> {
-    return;
-  }
-
-  public async onEndTimeChanged(path: PanLPath, entry: ITimelineEntry):
-  Promise<void> {
+  public async onEndTimeChange(path: PanLPath, entry: ITimelineEntry) {
     return;
   }
 }

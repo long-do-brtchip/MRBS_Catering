@@ -10,10 +10,9 @@ import {
 import moment = require("moment");
 import {ErrorCode} from "./builder";
 import {Cache, IRoomStatusChange} from "./cache";
-import {
-ICalendar, ICalendarNotification, IMeetingInfo,
-ITimelineEntry, ITimelineRequest,
-} from "./calendar";
+import { ICalendar, IMeetingInfo, ITimelineEntry,
+  ITimelineRequest} from "./calendar";
+import {ICalendarEvent} from "./interface";
 import {log} from "./log";
 import {CalendarType, ICalendarConfig, IHubConfig} from "./persist";
 
@@ -47,7 +46,7 @@ export class EWSCalendar implements ICalendar, IRoomStatusChange {
   private service: ExchangeService;
   private subMap = new Map<string, StreamingSubscriptionConnection>();
 
-  constructor(private notify: ICalendarNotification,
+  constructor(private notify: ICalendarEvent<string>,
               private cache: Cache, config: ICalendarConfig,
               private configHub: IHubConfig) {
     EwsLogging.DebugLogEnabled = false;
@@ -265,7 +264,7 @@ export class EWSCalendar implements ICalendar, IRoomStatusChange {
     } catch (err) {
       if (err.ErrorCode === 249) {
         const start = await this.cache.getMeetingStartFromUid(room, uid);
-        this.notify.onDeleteNotification(room, start);
+        this.notify.onDelete(room, start);
         log.silly("[notify] meeting deleted");
       }
       return;
@@ -290,7 +289,7 @@ export class EWSCalendar implements ICalendar, IRoomStatusChange {
         this.cache.setMeetingInfo(room, entry.start, info),
         this.cache.setMeetingUid(room, entry.start, uid),
       ]);
-      this.notify.onAddNotification(room, entry);
+      this.notify.onAdd(room, entry);
       log.silly("[notify] new meeting");
     } else if (type === EventType.Modified) {
       const start = await this.cache.getMeetingStartFromUid(room, uid);
@@ -302,17 +301,17 @@ export class EWSCalendar implements ICalendar, IRoomStatusChange {
         const end = await this.cache.getTimelineEntryEndTime(room, start);
         await this.cache.setMeetingInfo(room, start, info);
         if (end === entry.end) {
-          await this.notify.onMeetingUpdateNotification(room, start);
+          await this.notify.onMeetingUpdate(room, start);
         } else {
-          await this.notify.onEndTimeChangeNotification(room, entry);
+          await this.notify.onEndTimeChange(room, entry);
         }
       } else {
-        await this.notify.onDeleteNotification(room, start);
+        await this.notify.onDelete(room, start);
         await Promise.all([
           this.cache.setMeetingInfo(room, entry.start, info),
           this.cache.setMeetingUid(room, entry.start, uid),
         ]);
-        await this.notify.onAddNotification(room, entry);
+        await this.notify.onAdd(room, entry);
       }
     } else {
       log.verbose("[notify] unhandled notification type:", type);

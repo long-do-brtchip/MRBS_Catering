@@ -4,7 +4,7 @@ import {ErrorCode, MessageBuilder} from "./builder";
 import {Cache} from "./cache";
 import {CalendarManager, ITimelineEntry, ITimelineRequest} from "./calendar";
 import {Database} from "./database";
-import {IAgentEvent, ICalendarEvent,
+import {IAgentEvent, ICalendarEvent, ICalendarManagerEvent,
   IMessageTransport, IPanLEvent} from "./interface";
 import {log} from "./log";
 import {PanLPath} from "./path";
@@ -12,7 +12,8 @@ import {IHubConfig, IPanlConfig, Persist} from "./persist";
 import {TcpSocket} from "./socket";
 import {Transmit} from "./xmit";
 
-export class PanLService implements IAgentEvent, IPanLEvent, ICalendarEvent {
+export class PanLService implements IAgentEvent, IPanLEvent,
+  ICalendarEvent<PanLPath>, ICalendarManagerEvent {
   public static async getInstance():
   Promise<[PanLService, () => Promise<void>]> {
     const db = await Database.getInstance();
@@ -44,17 +45,17 @@ export class PanLService implements IAgentEvent, IPanLEvent, ICalendarEvent {
 
   public async start() {
     await this.transport.start(this, this);
-    await this.cal.connect(this);
+    await this.cal.connect(this, this);
   }
 
-  public async stop(): Promise<void> {
+  public async stop() {
     clearTimeout(this.newDayJob);
     await this.transport.stop();
     await this.cal.disconnect();
   }
 
   // Agent events
-  public async onAgentConnected(agent: number): Promise<void> {
+  public async onAgentConnected(agent: number) {
     const msgs = [
       MessageBuilder.buildExpectedFirmwareVersion(),
       MessageBuilder.buildUUID(),
@@ -73,26 +74,26 @@ export class PanLService implements IAgentEvent, IPanLEvent, ICalendarEvent {
     }
   }
 
-  public async onAgentEnd(id: number): Promise<void> {
+  public async onAgentEnd(id: number) {
     log.debug(`Agent ${id} end notification`);
     await this.cache.removeAgent(id);
   }
 
-  public async onAgentError(id: number, err: Error): Promise<void> {
+  public async onAgentError(id: number, err: Error) {
     log.info(`Agent ${id} error: ${err}`);
   }
 
-  public async onTxDrain(id: number): Promise<void> {
+  public async onTxDrain(id: number) {
     this.tx.onDrain(id);
   }
 
-  public async onDeviceChange(id: number): Promise<void> {
+  public async onDeviceChange(id: number) {
     await this.cache.removeAgent(id);
     await this.onAgentConnected(id);
   }
 
   //  PanL events
-  public async onReportUUID(path: PanLPath, uuid: Buffer): Promise<void> {
+  public async onReportUUID(path: PanLPath, uuid: Buffer) {
     const room = await Persist.findPanlRoom(uuid);
 
     if (room !== undefined) {
@@ -109,11 +110,11 @@ export class PanLService implements IAgentEvent, IPanLEvent, ICalendarEvent {
     }
   }
 
-  public async onStatus(path: PanLPath, status: number): Promise<void> {
+  public async onStatus(path: PanLPath, status: number) {
     log.error("TODO: Method onStatus not implemented.");
   }
 
-  public async onGetTime(path: PanLPath): Promise<void> {
+  public async onGetTime(path: PanLPath) {
     // Must not be combined with other messages to minimize the latency
     try {
       this.tx.sendImmediately(path, [MessageBuilder.buildTime()]);
@@ -122,12 +123,12 @@ export class PanLService implements IAgentEvent, IPanLEvent, ICalendarEvent {
     }
   }
 
-  public async onRequestFirmware(path: PanLPath): Promise<void> {
+  public async onRequestFirmware(path: PanLPath) {
     // TODO: Broadcast assets and firmware
     log.error("TODO: Method onRequestFirmware not implemented.");
   }
 
-  public async onPasscode(path: PanLPath, code: number): Promise<void> {
+  public async onPasscode(path: PanLPath, code: number) {
     log.debug(`Path ${path} requests passcode authentication`);
     try {
       await this.processAuthResult(path, await Auth.authByPasscode(code));
@@ -136,7 +137,7 @@ export class PanLService implements IAgentEvent, IPanLEvent, ICalendarEvent {
     }
   }
 
-  public async onRFID(path: PanLPath, epc: Buffer): Promise<void> {
+  public async onRFID(path: PanLPath, epc: Buffer) {
     try {
       await this.processAuthResult(path, await Auth.authByRFID(epc));
     } catch (err) {
@@ -144,8 +145,7 @@ export class PanLService implements IAgentEvent, IPanLEvent, ICalendarEvent {
     }
   }
 
-  public async onGetTimeline(
-    path: PanLPath, req: ITimelineRequest): Promise<void> {
+  public async onGetTimeline(path: PanLPath, req: ITimelineRequest) {
     const method = req.lookForward ? "from" : "before";
     log.debug(`Path ${path} requests ${req.maxCount} slots ${method} ` +
       moment(req.id).calendar());
@@ -158,7 +158,7 @@ export class PanLService implements IAgentEvent, IPanLEvent, ICalendarEvent {
   }
 
   public async onGetMeetingInfo(
-    path: PanLPath, id: number, getBody: boolean): Promise<void> {
+    path: PanLPath, id: number, getBody: boolean) {
     if (getBody) {
       log.error("TODO: Parameter getBody not implemented.");
     }
@@ -171,8 +171,7 @@ export class PanLService implements IAgentEvent, IPanLEvent, ICalendarEvent {
     }
   }
 
-  public async onCreateBooking(path: PanLPath, entry: ITimelineEntry):
-  Promise<void> {
+  public async onCreateBooking(path: PanLPath, entry: ITimelineEntry) {
     log.debug(`Path ${path} create meeting for ` +
       moment(entry.start).calendar());
     try {
@@ -183,8 +182,7 @@ export class PanLService implements IAgentEvent, IPanLEvent, ICalendarEvent {
     }
   }
 
-  public async onExtendMeeting(path: PanLPath, entry: ITimelineEntry):
-  Promise<void> {
+  public async onExtendMeeting(path: PanLPath, entry: ITimelineEntry) {
     log.debug(`Path ${path} extend meeting for ` +
       moment(entry.start).calendar());
     try {
@@ -195,8 +193,7 @@ export class PanLService implements IAgentEvent, IPanLEvent, ICalendarEvent {
     }
   }
 
-  public async onCancelUnclaimedMeeting(path: PanLPath, id: number):
-  Promise<void> {
+  public async onCancelUnclaimedMeeting(path: PanLPath, id: number) {
     if (path.dest === MessageBuilder.BROADCAST_ADDR) {
       log.error(`Invalid sender from agent ${path.agent}.`);
     }
@@ -209,8 +206,7 @@ export class PanLService implements IAgentEvent, IPanLEvent, ICalendarEvent {
     }
   }
 
-  public async onEndMeeting(path: PanLPath, id: number):
-  Promise<void> {
+  public async onEndMeeting(path: PanLPath, id: number) {
     log.debug(`Path ${path} end meeting for ${moment(id).calendar()}`);
     try {
       this.tx.send(path, [MessageBuilder.buildErrorCode(
@@ -220,8 +216,7 @@ export class PanLService implements IAgentEvent, IPanLEvent, ICalendarEvent {
     }
   }
 
-  public async onCancelMeeting(path: PanLPath, id: number):
-  Promise<void> {
+  public async onCancelMeeting(path: PanLPath, id: number) {
     log.debug(`Path ${path} cancel meeting for ${moment(id).calendar()}`);
     try {
       this.tx.send(path, [MessageBuilder.buildErrorCode(
@@ -231,8 +226,7 @@ export class PanLService implements IAgentEvent, IPanLEvent, ICalendarEvent {
     }
   }
 
-  public async onCheckClaimMeeting(path: PanLPath, id: number):
-  Promise<void> {
+  public async onCheckClaimMeeting(path: PanLPath, id: number) {
     log.debug(`Path ${path} want to claim for ${moment(id).calendar()}`);
     try {
       this.tx.send(path, [MessageBuilder.buildErrorCode(
@@ -243,20 +237,20 @@ export class PanLService implements IAgentEvent, IPanLEvent, ICalendarEvent {
   }
 
   // Calendar events
-  public async onCalMgrReady(): Promise<void> {
+  public async onCalMgrReady() {
     log.info("Calendar manager is online");
     await this.cache.consumePending((path) => {
       this.initPanel(path);
     });
   }
 
-  public async onCalMgrError(err: Error): Promise<void> {
+  public async onCalMgrError(err: Error) {
     log.error(`Failed to start Calendar Manager ${err},` +
       `will try again in 30seconds`);
     setTimeout(this.cal.connect.bind(this.cal), 30 * 1000);
   }
 
-  public async onAdd(path: PanLPath, entry: ITimelineEntry): Promise<void> {
+  public async onAdd(path: PanLPath, entry: ITimelineEntry) {
     try {
       this.tx.send(path, [MessageBuilder.buildAddMeeting(entry)]);
     } catch (err) {
@@ -264,8 +258,7 @@ export class PanLService implements IAgentEvent, IPanLEvent, ICalendarEvent {
     }
   }
 
-  public async onDelete(
-    path: PanLPath, id: number): Promise<void> {
+  public async onDelete(path: PanLPath, id: number) {
     try {
       this.tx.send(path, [MessageBuilder.buildDeleteMeeting(id)]);
     } catch (err) {
@@ -273,8 +266,7 @@ export class PanLService implements IAgentEvent, IPanLEvent, ICalendarEvent {
     }
   }
 
-  public async onUpdate(
-    path: PanLPath, id: number): Promise<void> {
+  public async onMeetingUpdate(path: PanLPath, id: number) {
     try {
       this.tx.send(path, [MessageBuilder.buildUpdateMeeting(id)]);
     } catch (err) {
@@ -282,8 +274,7 @@ export class PanLService implements IAgentEvent, IPanLEvent, ICalendarEvent {
     }
   }
 
-  public async onEndTimeChanged(path: PanLPath, entry: ITimelineEntry):
-  Promise<void> {
+  public async onEndTimeChange(path: PanLPath, entry: ITimelineEntry) {
     try {
       this.tx.send(path, [MessageBuilder.buildMeetingEndTimeChanged(entry)]);
     } catch (err) {
@@ -292,7 +283,7 @@ export class PanLService implements IAgentEvent, IPanLEvent, ICalendarEvent {
   }
 
   //  Private methods
-  private async initPanel(path: PanLPath): Promise<void> {
+  private async initPanel(path: PanLPath) {
     const now = moment();
     const epoch = now.valueOf();
     const minutesOfDay = now.diff(now.clone().startOf("day"), "minutes");
@@ -341,8 +332,7 @@ export class PanLService implements IAgentEvent, IPanLEvent, ICalendarEvent {
     }
   }
 
-  private async processAuthResult(path: PanLPath, email: string):
-  Promise<void> {
+  private async processAuthResult(path: PanLPath, email: string) {
     if (email.length === 0) {
       const msg = [MessageBuilder.buildErrorCode(ErrorCode.ERROR_AUTH_ERROR)];
       this.tx.send(path, msg);
@@ -367,7 +357,7 @@ export class PanLService implements IAgentEvent, IPanLEvent, ICalendarEvent {
       this.onNewDayTask.bind(this), moment().endOf("day").diff(now));
   }
 
-  private async updateMeetingInfoForAllPanls(): Promise<void> {
+  private async updateMeetingInfoForAllPanls() {
     const dayStart = moment().startOf("day").valueOf();
     const rooms = await this.cache.getOnlineRooms();
     for (const room of rooms) {

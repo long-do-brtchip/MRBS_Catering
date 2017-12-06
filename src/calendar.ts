@@ -3,7 +3,7 @@ import {ErrorCode} from "./builder";
 import {Cache} from "./cache";
 import {Database} from "./database";
 import {EWSCalendar} from "./ews";
-import {ICalendarEvent} from "./interface";
+import {ICalendarEvent, ICalendarManagerEvent} from "./interface";
 import {log} from "./log";
 import {MockupCalendar} from "./mockup";
 import {PanLPath} from "./path";
@@ -43,17 +43,8 @@ export interface ICalendar {
   init?(): Promise<void>;
 }
 
-export interface ICalendarNotification {
-  onEndTimeChangeNotification(room: string, entry: ITimelineEntry):
-  Promise<void>;
-  onAddNotification(room: string, entry: ITimelineEntry):
-  Promise<void>;
-  onDeleteNotification(room: string, id: number): Promise<void>;
-  onMeetingUpdateNotification(room: string, id: number): Promise<void>;
-}
-
-export class CalendarManager implements ICalendarNotification {
-  private event?: ICalendarEvent;
+export class CalendarManager implements ICalendarEvent<string> {
+  private event?: ICalendarEvent<PanLPath>;
   private calendar: ICalendar;
   private isConnected: boolean;
 
@@ -195,7 +186,7 @@ export class CalendarManager implements ICalendarNotification {
       await this.cache.getRoomAddress(path), id);
   }
 
-  public async onAddNotification(room: string, entry: ITimelineEntry) {
+  public async onAdd(room: string, entry: ITimelineEntry) {
     if (!this.event) {
       return;
     }
@@ -212,8 +203,7 @@ export class CalendarManager implements ICalendarNotification {
     }
   }
 
-  public async onEndTimeChangeNotification(
-    room: string, entry: ITimelineEntry) {
+  public async onEndTimeChange(room: string, entry: ITimelineEntry) {
     // Start time no change
     if (!this.event) {
       return;
@@ -233,12 +223,11 @@ export class CalendarManager implements ICalendarNotification {
     await this.cache.setTimelineEntry(room, entry);
     const paths = await this.cache.getRoomPanLs(room);
     for (const path of paths) {
-      this.event.onEndTimeChanged(path, entry);
+      this.event.onEndTimeChange(path, entry);
     }
   }
 
-  public async onDeleteNotification(room: string, id: number) {
-    // Call onDeleteNotification and onAddNotification if start time changed
+  public async onDelete(room: string, id: number) {
     if (!this.event) {
       return;
     }
@@ -251,7 +240,7 @@ export class CalendarManager implements ICalendarNotification {
     }
   }
 
-  public async onMeetingUpdateNotification(room: string, id: number) {
+  public async onMeetingUpdate(room: string, id: number) {
     if (!this.event) {
       return;
     }
@@ -260,11 +249,12 @@ export class CalendarManager implements ICalendarNotification {
       + " is updated.");
     const paths = await this.cache.getRoomPanLs(room);
     for (const path of paths) {
-      this.event.onUpdate(path, id);
+      this.event.onMeetingUpdate(path, id);
     }
   }
 
-  public async connect(event: ICalendarEvent) {
+  public async connect(event: ICalendarEvent<PanLPath>,
+                       calMgrEvent?: ICalendarManagerEvent) {
     log.info("Start Calendar Manager...");
     this.event = event;
 
@@ -289,17 +279,21 @@ export class CalendarManager implements ICalendarNotification {
           break;
       }
     } catch (err) {
-      await this.event.onCalMgrError(err);
+      if (calMgrEvent) {
+        await calMgrEvent.onCalMgrError(err);
+      }
       return;
     }
     if (this.calendar.init) {
       await this.calendar.init();
     }
     this.isConnected = true;
-    try {
-      await this.event.onCalMgrReady();
-    } catch (Error) {
-      log.debug("PanLService stopped already");
+    if (calMgrEvent) {
+      try {
+          await calMgrEvent.onCalMgrReady();
+      } catch (Error) {
+        log.debug("PanLService stopped already");
+      }
     }
   }
 

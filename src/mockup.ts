@@ -2,9 +2,10 @@ import moment = require("moment");
 import {Auth} from "./auth";
 import {ErrorCode} from "./builder";
 import {Cache} from "./cache";
-import {ICalendar, ICalendarNotification, ITimelineEntry} from "./calendar";
+import {ICalendar, ITimelineEntry} from "./calendar";
 import {Database} from "./database";
 import {Employee} from "./entity/auth/employee";
+import {ICalendarEvent} from "./interface";
 import {log} from "./log";
 import {PanLPath} from "./path";
 import {IHubConfig, Persist} from "./persist";
@@ -125,7 +126,7 @@ export class MockupCalendar implements ICalendar {
     }
   }
 
-  constructor(private notify: ICalendarNotification,
+  constructor(private notify: ICalendarEvent<string>,
               private cache: Cache, private configHub: IHubConfig) {
   }
 
@@ -189,7 +190,7 @@ export class MockupCalendar implements ICalendar {
       }),
       this.cache.setMeetingUid(room, entry.start, email),
     ]);
-    this.notify.onAddNotification(room, entry);
+    this.notify.onAdd(room, entry);
     return ErrorCode.ERROR_SUCCESS;
   }
 
@@ -204,7 +205,7 @@ export class MockupCalendar implements ICalendar {
       info.subject = `Extended: ${info.subject}`;
     }
     await this.cache.setMeetingInfo(room, entry.start, info);
-    this.notify.onEndTimeChangeNotification(room, entry);
+    this.notify.onEndTimeChange(room, entry);
     return ErrorCode.ERROR_SUCCESS;
   }
 
@@ -222,13 +223,13 @@ export class MockupCalendar implements ICalendar {
       info.subject = `Ended: ${info.subject}`;
     }
     await this.cache.setMeetingInfo(room, id, info);
-    this.notify.onEndTimeChangeNotification(room, entry);
+    this.notify.onEndTimeChange(room, entry);
     return ErrorCode.ERROR_SUCCESS;
   }
 
   public async cancelMeeting(room: string, id: number, email: string):
   Promise<ErrorCode> {
-    this.notify.onDeleteNotification(room, id);
+    this.notify.onDelete(room, id);
     return ErrorCode.ERROR_SUCCESS;
   }
 
