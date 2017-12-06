@@ -20,9 +20,24 @@ export class Cache {
       Cache.instance.addRef();
       return Cache.instance;
     }
+    return Cache.createInstance();
+  }
 
+  private static instance: Cache;
+
+  private static readonly SEQUENCE_KEY = "sequence";
+  private static readonly PENDING_KEY = "pending";
+  private static readonly ROOMNAME_KEY = "roomname";
+  private static readonly PANLS_PREFIX = "panls:";
+  private static readonly SHADOW_PREFIX = "shadow:";
+  private static readonly TIMELINE_PREFIX = "timeline:";
+  private static readonly MEETING_PREFIX = "meeting:";
+  private static readonly MEETINGUID_PREFIX = "meetingid:";
+  private static readonly KEYSPACE0_PREFIX = `__keyspace@0__:`;
+
+  private static async createInstance(port?: number): Promise<Cache> {
     return new Promise<Cache>((resolve, reject) => {
-      const client = new redis();
+      const client = port ? new redis(port) : new redis();
       client.on("ready", async () => {
         log.verbose("Redis connection created");
         client.set(Cache.SEQUENCE_KEY, 0);
@@ -48,22 +63,11 @@ export class Cache {
       });
       client.on("error", (error) => {
         log.silly("Redis error");
+        client.quit();
         reject(error);
       });
     });
   }
-
-  private static instance: Cache;
-
-  private static readonly SEQUENCE_KEY = "sequence";
-  private static readonly PENDING_KEY = "pending";
-  private static readonly ROOMNAME_KEY = "roomname";
-  private static readonly PANLS_PREFIX = "panls:";
-  private static readonly SHADOW_PREFIX = "shadow:";
-  private static readonly TIMELINE_PREFIX = "timeline:";
-  private static readonly MEETING_PREFIX = "meeting:";
-  private static readonly MEETINGUID_PREFIX = "meetingid:";
-  private static readonly KEYSPACE0_PREFIX = `__keyspace@0__:`;
 
   private static pathToIdKey(path: PanLPath): string {
     return `path-id:${path.uid}`;

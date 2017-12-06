@@ -1,6 +1,7 @@
 import {assert, expect, use} from "chai";
 import chaiAsPromised = require("chai-as-promised");
 import moment = require("moment");
+import rewire = require("rewire");
 import {Cache, IRoomStatusChange} from "../../src/cache";
 import {ITimelineEntry} from "../../src/calendar";
 import {Room} from "../../src/entity/hub/room";
@@ -57,6 +58,18 @@ describe("Cache module", () => {
   after(async () => {
     await cache.flush();
     await cache.stop();
+  });
+
+  describe("Connection", () => {
+    it("shall raise error when no redis server", async () => {
+      const parser = rewire("../../src/cache");
+      const createInstance = parser.__get__("Cache.createInstance");
+      expect(createInstance(3699)).to.be.rejectedWith(Error);
+    });
+    it("shall get same instance", async () => {
+      expect(await Cache.getInstance()).to.deep.equal(cache);
+      cache.stop();
+    });
   });
 
   describe("Unconfigured ID", () => {
