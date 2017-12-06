@@ -111,6 +111,15 @@ describe("Cache module", () => {
         expect(path.dest).to.equal(1);
       }
     });
+    it("create duplicate Cache instance", async () => {
+      let cache_dup : Cache;
+      cache_dup = await Cache.getInstance();
+      await cache_dup.flush();
+      expect(await cache_dup.addUnconfigured(new PanLPath(1, 1), uuids[0]))
+        .to.equal(await cache_dup.addUnconfigured(new PanLPath(1, 1), uuids[0]));
+      await cache_dup.flush();
+      await cache_dup.stop();
+    });
   });
 
   const room = "test1@ftdi.local";

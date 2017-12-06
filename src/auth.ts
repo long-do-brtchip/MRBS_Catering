@@ -26,7 +26,7 @@ export class Auth {
   public static async setPasscode(employee: Employee, passcode: number) {
     let pass = await Passcode.findOne({where: {passcode}});
     if (pass) {
-      throw(new Error("Passcode is not unique"));
+      throw(new Error ("Passcode is not unique"));
     }
     pass = new Passcode();
     pass.passcode = passcode;
@@ -55,7 +55,7 @@ export class Auth {
   }
 
   public static async authByRFID(epc: Buffer): Promise<string> {
-    const rfid = await Rfid.findOne({where: {epc}});
+    const rfid = await Rfid.findOne({where: {epc}, relations: ["employee"]});
     if (!rfid) {
       return "";
     }
