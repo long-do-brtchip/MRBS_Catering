@@ -320,6 +320,7 @@ export class EWSCalendar implements ICalendar, IRoomStatusChange {
 
   private async streamNotification(room: string): Promise<void> {
     log.verbose(`Start EWS StreamSubscription for room ${room}...`);
+    this.impersonationSupport(room);
     const folderId: FolderId[] = [new FolderId(
       WellKnownFolderName.Calendar, new Mailbox(room))];
     const stream = await this.service.SubscribeToStreamingNotifications(

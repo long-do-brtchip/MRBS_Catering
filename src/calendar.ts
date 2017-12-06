@@ -66,7 +66,7 @@ export class CalendarManager implements ICalendarEvent<string> {
         moment(req.id).startOf("day").calendar());
       for (const entry of entries) {
         log.silly("entry starts: " + moment(entry.start).calendar() +
-         ", ends:" + moment(entry.end).calendar());
+         ", ends: " + moment(entry.end).calendar());
       }
       await this.cache.setTimeline(room, req.id, entries);
       entries = await this.cache.getTimeline(room, req);

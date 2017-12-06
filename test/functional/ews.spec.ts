@@ -113,9 +113,8 @@ describe.skip("EWS module", () => {
       return moment(x).second(0).millisecond(0).valueOf();
     }
 
-    it("should able create booking", async function createBooking() {
+    it("should be able to create booking", async function createBooking() {
       this.slow(10000);
-      await cache.flush();
       await cache.addConfigured(path, room);
 
       const req = {
@@ -129,6 +128,7 @@ describe.skip("EWS module", () => {
           .valueOf(),
       };
       await ews.createBooking(roomAddress, entry, email);
+      // TODO: wait for notification here
       expect(await cal.getTimeline(path, req)).to.eql([entry]);
     }).timeout(10000);
 
