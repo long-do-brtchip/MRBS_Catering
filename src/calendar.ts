@@ -272,14 +272,12 @@ export class CalendarManager implements ICalendarEvent<string> {
           this.calendar = new MockupCalendar(this, this.cache, this.hubConfig);
           break;
       }
+      await this.calendar.init();
     } catch (err) {
       if (calMgrEvent) {
         await calMgrEvent.onCalMgrError(err);
       }
       return;
-    }
-    if (this.calendar.init) {
-      await this.calendar.init();
     }
     this.isConnected = true;
     if (calMgrEvent) {

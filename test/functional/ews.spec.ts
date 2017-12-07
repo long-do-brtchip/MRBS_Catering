@@ -41,7 +41,7 @@ describe("EWS module", () => {
   let cache: Cache;
   let db: Database;
   const path = new PanLPath(88, 88);
-  const roomAddress = "tokyo@hanhzz.onmicrosoft.com";
+  const roomAddress = "tokyo-room@hanhzz.onmicrosoft.com";
   const room = new Room(roomAddress, "Tokyo Room");
   const evt: EventEmitter = new EventEmitter();
   const consumer = new CalendarEventConsumer(evt);

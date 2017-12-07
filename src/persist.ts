@@ -115,7 +115,7 @@ export class Persist {
   public static async getCalendarConfig(): Promise<ICalendarConfig> {
     return Persist.getConfig<ICalendarConfig>(ConfigType.CALENDAR_CONFIG, {
       // TODO: set default to UNCONFIGURED
-      type: CalendarType.MOCKUP,
+      type: CalendarType.OFFICE365,
       address: "https://outlook.office365.com/EWS/Exchange.asmx",
       username: "tan@hanhzz.onmicrosoft.com",
       password: "T@nt3sting",

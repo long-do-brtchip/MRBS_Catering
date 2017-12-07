@@ -9,6 +9,7 @@ import {Persist} from "./persist";
 import {PanLService} from "./service";
 
 export const api = express.Router();
+const prodEnv = process.env.NODE_ENV === "production";
 
 async function createRoom(address: string, name: string): Promise<boolean> {
   const room = new Room(address, name);
@@ -32,6 +33,9 @@ api.route("/rooms").get(async (req, res) => {
 });
 
 api.route("/room/:address/:name").get(async (req, res) => {
+  if (prodEnv) {
+    return res.sendStatus(403);
+  }
   if (req.params.address === undefined || req.params.name === undefined) {
     return res.sendStatus(400);
   }

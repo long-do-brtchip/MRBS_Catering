@@ -3,9 +3,10 @@ import {
   CalendarView, ConflictResolutionMode, ConnectingIdType, DateTime,
   EventType, EwsLogging, ExchangeService, ExchangeVersion, Folder, FolderId,
   ImpersonatedUserId, Item, ItemEvent, ItemId, Mailbox, NotificationEventArgs,
-  PropertySet, SendInvitationsMode, SendInvitationsOrCancellationsMode,
+  PropertySet, ResolveNameSearchLocation, SendInvitationsMode,
+  SendInvitationsOrCancellationsMode,
   StreamingSubscriptionConnection, SubscriptionErrorEventArgs, Uri,
-  WebCredentials, WellKnownFolderName,
+  UserSettingName, WebCredentials, WellKnownFolderName,
 } from "ews-javascript-api";
 import moment = require("moment");
 import {ErrorCode} from "./builder";
@@ -16,9 +17,53 @@ import {ICalendarEvent} from "./interface";
 import {log} from "./log";
 import {CalendarType, ICalendarConfig, IHubConfig} from "./persist";
 
+export interface IRoomDetails {
+  name: string;
+  location: string;
+  country: string;
+}
+
 export class EWSCalendar implements ICalendar, IRoomStatusChange {
+  public static schemaToVersion(schema: string): ExchangeVersion {
+    switch (schema) {
+    case "Exchange2007":
+    case "Exchange2007_SP1":
+      return ExchangeVersion.Exchange2007_SP1;
+    case "Exchange2010":
+      return ExchangeVersion.Exchange2010;
+    case "Exchange2010_SP1":
+      return ExchangeVersion.Exchange2010_SP1;
+    case "Exchange2010_SP2":
+      return ExchangeVersion.Exchange2010_SP2;
+    case "Exchange2013":
+      return ExchangeVersion.Exchange2013;
+    case "Exchange2013_SP1":
+      return ExchangeVersion.Exchange2013_SP1;
+    case "Exchange2015":
+      return ExchangeVersion.Exchange2015;
+    case "Exchange2016":
+      return ExchangeVersion.Exchange2016;
+    default:
+      throw(new Error("Unsupported exchange version " + schema));
+    }
+  }
+
+  public static async utoDiscoverUrl(user: string, pass: string) {
+    const service = new ExchangeService();
+    service.Credentials = new WebCredentials(user, pass);
+    await service.AutodiscoverUrl(user, () => true);
+    return service.Url.toString();
+  }
+
   private static minuteBased(x: number): number {
      return moment(x).second(0).millisecond(0).valueOf();
+  }
+
+  private static getDomain(url: string): string {
+    let hostname = (url.indexOf("://") > -1) ?
+      url.split("/")[2] : url.split("/")[0];
+    hostname = hostname.split(":")[0];
+    return hostname.split("?")[0];
   }
 
   private static parseEWSErrorCode(code: number): ErrorCode {
@@ -47,17 +92,16 @@ export class EWSCalendar implements ICalendar, IRoomStatusChange {
   private subMap = new Map<string, StreamingSubscriptionConnection>();
 
   constructor(private notify: ICalendarEvent<string>,
-              private cache: Cache, config: ICalendarConfig,
+              private cache: Cache, private config: ICalendarConfig,
               private configHub: IHubConfig) {
     EwsLogging.DebugLogEnabled = false;
-    // TODO: auto detect exchange server version
-    this.service = new ExchangeService(ExchangeVersion.Exchange2013);
-    this.service.Credentials = new WebCredentials(
-      config.username, config.password);
-    this.service.Url = new Uri(config.address);
   }
 
-  public async init(): Promise<void> {
+  public async init() {
+    this.service = new ExchangeService(await this.discoverVersion());
+    this.service.Credentials = new WebCredentials(
+      this.config.username, this.config.password);
+    this.service.Url = new Uri(this.config.address);
     await this.cache.subscribeRoomStatusChange(this);
   }
 
@@ -214,6 +258,41 @@ export class EWSCalendar implements ICalendar, IRoomStatusChange {
   Promise<ErrorCode> {
     return this.updateAppointment(room, id,
       (appt) => appt.Start = new DateTime(time));
+  }
+
+  public async resolveName(room: string): Promise<IRoomDetails | undefined> {
+    const name = await this.service.ResolveName(room,
+      ResolveNameSearchLocation.DirectoryOnly, true);
+    if (name.Count === 0) {
+      return undefined;
+    }
+    const contact = name._getItem(0).Contact;
+    const country = contact.PhysicalAddresses ?
+      contact.PhysicalAddresses._getItem(0).CountryOrRegion : "";
+    return {
+      name: contact.DisplayName,
+      location: contact.OfficeLocation,
+      country,
+    };
+  }
+
+  private async discoverVersion(): Promise<ExchangeVersion> {
+    const ad = new AutodiscoverService(
+      EWSCalendar.getDomain(this.config.address));
+    ad.Credentials = new WebCredentials(
+      this.config.username, this.config.password);
+    ad.RedirectionUrlValidationCallback = () => true;
+    const settings = [
+      UserSettingName.EwsSupportedSchemas,
+    ];
+    const response = await ad.GetUserSettings(this.config.username, settings);
+    const schemas = response.Settings[UserSettingName.EwsSupportedSchemas];
+    if (!schemas) {
+      throw(new Error("Not able to get supported EWS schema"));
+    }
+    const schema = schemas.split(", ").pop();
+    log.debug("Schema", schema, "will be used");
+    return EWSCalendar.schemaToVersion(schema);
   }
 
   private async modifyAppointment(room: string, id: number,
