@@ -178,7 +178,7 @@ export class EWSCalendar implements ICalendar, IRoomStatusChange {
     return false;
   }
 
-  public async disconnect(): Promise<void> {
+  public async deinit(): Promise<void> {
     this.stopped = true;
     this.cache.unsubscribeRoomStatusChange(this);
     for (const sub of this.subMap.values()) {

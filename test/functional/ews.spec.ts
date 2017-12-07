@@ -101,9 +101,8 @@ describe("EWS module", () => {
     });
     cal = new CalendarManager(cache, await Persist.getHubConfig(),
       await Persist.getPanlConfig());
-    ews = new EWSCalendar(cal, cache, await Persist.getCalendarConfig(),
-      await Persist.getHubConfig());
     await cal.connect(consumer);
+    ews = cal.calendar as EWSCalendar;
     await clearMeeting();
   });
 
@@ -220,7 +219,6 @@ describe("EWS module", () => {
 
     it("should able cancel meeting", async function cancelBooking() {
       this.slow(100000);
-      log.error("LY]5");
       await ews.cancelMeeting(roomAddress, entry.start, email);
       await check<number>(path, "delete", async (i) => i === entry.start);
     }).timeout(100000);

@@ -28,6 +28,8 @@ export interface ITimelineRequest {
 }
 
 export interface ICalendar {
+  init(): Promise<void>;
+  deinit(): Promise<void>;
   getTimeline(room: string, id: number): Promise<ITimelineEntry[]>;
   createBooking(room: string, entry: ITimelineEntry, email: string):
   Promise<ErrorCode>;
@@ -39,13 +41,11 @@ export interface ICalendar {
   cancelUnclaimedMeeting(room: string, id: number): Promise<ErrorCode>;
   isAttendeeInMeeting(room: string, id: number, email: string):
   Promise<boolean>;
-  disconnect?(): Promise<void>;
-  init?(): Promise<void>;
 }
 
 export class CalendarManager implements ICalendarEvent<string> {
+  public calendar: MockupCalendar | EWSCalendar;
   private event?: ICalendarEvent<PanLPath>;
-  private calendar: ICalendar;
   private isConnected: boolean;
 
   constructor(private cache: Cache, private hubConfig: IHubConfig,
@@ -293,9 +293,7 @@ export class CalendarManager implements ICalendarEvent<string> {
 
   public async disconnect(): Promise<void> {
     delete this.event;
-    if (this.calendar.disconnect) {
-      await this.calendar.disconnect();
-    }
+    await this.calendar.deinit();
     this.isConnected = false;
     delete this.calendar;
     await new Promise((resolve) => setTimeout(resolve, 10));

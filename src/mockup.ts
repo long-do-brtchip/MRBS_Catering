@@ -246,6 +246,10 @@ export class MockupCalendar implements ICalendar {
     return -1 !== emails.indexOf(email);
   }
 
+  public async deinit(): Promise<void> {
+    return;
+  }
+
   private async addFakeAuthDatas() {
     for (const auth of auths) {
       const employee = await Auth.addEmployee(auth.email, auth.name);
