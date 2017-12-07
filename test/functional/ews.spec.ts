@@ -107,6 +107,7 @@ describe("EWS module", () => {
   });
 
   after(async function cleanup() {
+    cache.removeAgent(path.agent);
     await cal.disconnect();
     await cache.flush();
     await cache.stop();
@@ -120,7 +121,6 @@ describe("EWS module", () => {
     }
     it("should be able to create booking", async function createBooking() {
       this.slow(10000);
-      await cache.addConfigured(path, room);
       entry = {
         start: minuteBased(moment().valueOf()),
         end: minuteBased(moment().add(1, "hours").valueOf()).valueOf(),

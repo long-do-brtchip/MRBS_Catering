@@ -1,6 +1,6 @@
 import {
-  Appointment, AppointmentSchema, AutodiscoverService,
-  CalendarView, ConflictResolutionMode, ConnectingIdType, DateTime,
+  Appointment, AppointmentSchema, AutodiscoverService, CalendarView,
+  ConflictResolutionMode, ConnectingIdType, DateTime, EmailAddress,
   EventType, EwsLogging, ExchangeService, ExchangeVersion, Folder, FolderId,
   ImpersonatedUserId, Item, ItemEvent, ItemId, Mailbox, NotificationEventArgs,
   PropertySet, ResolveNameSearchLocation, SendInvitationsMode,
@@ -21,6 +21,12 @@ export interface IRoomDetails {
   name: string;
   location: string;
   country: string;
+  email: string;
+}
+
+export interface IRoomList {
+  name: string;
+  rooms: IRoomDetails[];
 }
 
 export class EWSCalendar implements ICalendar, IRoomStatusChange {
@@ -271,9 +277,25 @@ export class EWSCalendar implements ICalendar, IRoomStatusChange {
       contact.PhysicalAddresses._getItem(0).CountryOrRegion : "";
     return {
       name: contact.DisplayName,
+      email: room,
       location: contact.OfficeLocation,
       country,
     };
+  }
+
+  public async discoverRooms(): Promise<IRoomList[]> {
+    const list: IRoomList[] = [];
+    const lists = await this.service.GetRoomLists();
+    for (const elem of lists.GetEnumerator()) {
+      const rooms = await this.service.GetRooms(new EmailAddress(elem.Address));
+      const ret = await Promise.all(
+        rooms.map((r) => this.resolveName(r.Address)));
+      list.push({
+        name: elem.Name,
+        rooms: ret.filter((n) => n !== undefined) as IRoomDetails[],
+      });
+    }
+    return list;
   }
 
   private async discoverVersion(): Promise<ExchangeVersion> {

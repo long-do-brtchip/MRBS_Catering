@@ -54,6 +54,7 @@ describe("Mockup calendar module", () => {
     }
   });
   after(async () => {
+    cache.removeAgent(path.agent);
     await cal.disconnect();
     await cache.stop();
     await db.stop();
